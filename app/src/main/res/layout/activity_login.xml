@@ -4,30 +4,66 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:padding="24dp">
+    android:padding="24dp"
+    android:background="#FFFFFF">
+
+    <ImageView
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:src="@drawable/ic_videocam"
+        android:tint="#6200EE"
+        android:layout_marginBottom="16dp" />
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="WebRTC Video Call"
-        android:textSize="24sp"
+        android:text="Video Call App"
+        android:textSize="28sp"
         android:textStyle="bold"
+        android:textColor="#6200EE"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Register with your phone number"
+        android:textSize="14sp"
+        android:textColor="#666666"
         android:layout_marginBottom="32dp" />
 
-    <EditText
-        android:id="@+id/usernameInput"
+    <com.google.android.material.textfield.TextInputLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:hint="Enter your username"
-        android:inputType="text"
-        android:padding="16dp"
-        android:layout_marginBottom="16dp" />
+        android:hint="Phone Number"
+        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+        android:layout_marginBottom="16dp">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/phoneInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="phone"
+            android:maxLength="10"
+            android:drawableStart="@drawable/ic_phone"
+            android:drawablePadding="8dp" />
+
+    </com.google.android.material.textfield.TextInputLayout>
 
     <Button
-        android:id="@+id/joinButton"
+        android:id="@+id/registerButton"
         android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Register &amp; Continue"
+        android:textAllCaps="false"
+        android:textSize="16sp"
+        android:backgroundTint="#6200EE" />
+
+    <TextView
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Join"
-        android:padding="16dp" />
+        android:text="Your phone number is used as your unique ID"
+        android:textSize="12sp"
+        android:textColor="#999999"
+        android:layout_marginTop="16dp" />
 
 </LinearLayout>

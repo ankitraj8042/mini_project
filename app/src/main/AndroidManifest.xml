@@ -40,6 +40,10 @@
             android:exported="false" />
 
         <activity
+            android:name=".ui.DialActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".ui.UserListActivity"
             android:exported="false" />
 

@@ -25,16 +25,23 @@ object SignalingManager {
     private var currentUserId: String? = null
     private var isConnected = false
     
+    // Store online users for quick lookup
+    private val onlineUsers = mutableSetOf<String>()
+    
+    // Callbacks for checkUserOnline
+    private val userCheckCallbacks = mutableMapOf<String, (Boolean) -> Unit>()
+    
     // Listeners
     private var callListener: CallSignalingListener? = null
     private var userListListener: UserListListener? = null
     
     interface CallSignalingListener {
-        fun onOfferReceived(from: String, sdp: SessionDescription)
+        fun onOfferReceived(from: String, sdp: SessionDescription, isVideoCall: Boolean)
         fun onAnswerReceived(sdp: SessionDescription)
         fun onIceCandidateReceived(candidate: IceCandidate)
         fun onCallRejected()
         fun onCallEnded()
+        fun onEmojiReceived(emoji: String)
     }
     
     interface UserListListener {
@@ -74,20 +81,35 @@ object SignalingManager {
                         usersArray?.forEach { element ->
                             users.add(element.asString)
                         }
+                        // Update online users set
+                        onlineUsers.clear()
+                        onlineUsers.addAll(users)
+                        
                         val filteredUsers = users.filter { it != currentUserId }
                         Log.d(TAG, "User list parsed: $users, filtered (excluding $currentUserId): $filteredUsers")
                         Log.d(TAG, "UserListListener is: ${if (userListListener != null) "SET" else "NULL"}")
                         userListListener?.onUserListUpdated(filteredUsers)
                     }
+                    
+                    "userStatus" -> {
+                        val userId = jsonObject.get("userId")?.asString
+                        val online = jsonObject.get("online")?.asBoolean ?: false
+                        Log.d(TAG, "User status: $userId is ${if (online) "online" else "offline"}")
+                        userId?.let {
+                            userCheckCallbacks.remove(it)?.invoke(online)
+                        }
+                    }
 
                     "offer" -> {
                         val from = jsonObject.get("from")?.asString ?: "unknown"
                         val sdp = jsonObject.get("sdp")?.asString
-                        Log.d(TAG, "Offer received from $from")
+                        val isVideo = jsonObject.get("isVideoCall")?.asBoolean ?: true
+                        Log.d(TAG, "Offer received from $from (video: $isVideo)")
                         if (sdp != null) {
                             callListener?.onOfferReceived(
                                 from,
-                                SessionDescription(SessionDescription.Type.OFFER, sdp)
+                                SessionDescription(SessionDescription.Type.OFFER, sdp),
+                                isVideo
                             )
                         }
                     }
@@ -130,6 +152,27 @@ object SignalingManager {
                         Log.d(TAG, "Call ended by $from")
                         callListener?.onCallEnded()
                     }
+                    
+                    "emoji" -> {
+                        val from = jsonObject.get("from")?.asString
+                        val emoji = jsonObject.get("emoji")?.asString
+                        Log.d(TAG, "========= EMOJI RECEIVED =========")
+                        Log.d(TAG, "From: $from, Emoji: $emoji")
+                        Log.d(TAG, "callListener is: ${if (callListener != null) "SET" else "NULL"}")
+                        Log.d(TAG, "currentUserId: $currentUserId")
+                        if (emoji != null && callListener != null) {
+                            Log.d(TAG, "Dispatching emoji to listener...")
+                            try {
+                                callListener?.onEmojiReceived(emoji)
+                                Log.d(TAG, "Emoji dispatched successfully!")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Error dispatching emoji: ${e.message}", e)
+                            }
+                        } else {
+                            Log.e(TAG, "Cannot dispatch emoji - emoji: $emoji, listener: $callListener")
+                        }
+                        Log.d(TAG, "==================================")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error parsing message: ${e.message}", e)
@@ -157,9 +200,12 @@ object SignalingManager {
             return
         }
         
-        // Disconnect existing connection if different user
+        // Close existing connection if any (but don't clear listeners)
         if (webSocket != null) {
-            disconnect()
+            Log.d(TAG, "Closing existing connection to reconnect...")
+            webSocket?.close(1000, "Reconnecting")
+            webSocket = null
+            isConnected = false
         }
         
         currentUserId = userId
@@ -176,12 +222,13 @@ object SignalingManager {
         userListListener = listener
     }
     
-    fun sendOffer(to: String, sdp: SessionDescription) {
+    fun sendOffer(to: String, sdp: SessionDescription, isVideoCall: Boolean = true) {
         val msg = mapOf(
             "type" to "offer",
             "from" to currentUserId,
             "to" to to,
-            "sdp" to sdp.description
+            "sdp" to sdp.description,
+            "isVideoCall" to isVideoCall
         )
         send(msg)
     }
@@ -231,22 +278,94 @@ object SignalingManager {
     fun requestUserList() {
         send(mapOf("type" to "getUsers", "from" to currentUserId))
     }
+    
+    fun checkUserOnline(userId: String, callback: (Boolean) -> Unit) {
+        Log.d(TAG, "checkUserOnline: $userId, onlineUsers: $onlineUsers, isConnected: $isConnected")
+        
+        // First check local cache
+        if (onlineUsers.contains(userId)) {
+            Log.d(TAG, "User $userId found in local cache")
+            callback(true)
+            return
+        }
+        
+        // Check if we're connected
+        if (!isConnected || webSocket == null) {
+            Log.e(TAG, "Not connected, cannot check user online status")
+            callback(false)
+            return
+        }
+        
+        // Store callback and send request to server
+        userCheckCallbacks[userId] = callback
+        send(mapOf("type" to "checkUser", "userId" to userId))
+        
+        // Add a timeout in case server doesn't respond
+        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+            if (userCheckCallbacks.containsKey(userId)) {
+                Log.d(TAG, "Timeout waiting for user status response for $userId")
+                userCheckCallbacks.remove(userId)?.invoke(false)
+            }
+        }, 3000)
+    }
+    
+    fun sendEmoji(to: String, emoji: String) {
+        val msg = mapOf(
+            "type" to "emoji",
+            "from" to currentUserId,
+            "to" to to,
+            "emoji" to emoji
+        )
+        send(msg)
+    }
 
     private fun send(data: Map<String, Any?>) {
         val json = gson.toJson(data)
         Log.d(TAG, "Sending: $json")
-        webSocket?.send(json)
+        val sent = webSocket?.send(json) ?: false
+        if (!sent) {
+            Log.e(TAG, "Failed to send message - WebSocket is null or closed")
+        }
     }
 
     fun disconnect() {
         Log.d(TAG, "Disconnecting...")
-        callListener = null
-        userListListener = null
         webSocket?.close(1000, "User disconnected")
         webSocket = null
         isConnected = false
         currentUserId = null
+        onlineUsers.clear()
+        // Note: Don't clear listeners here - they are managed by activities
     }
     
-    fun isConnected(): Boolean = isConnected
+    fun clearListeners() {
+        callListener = null
+        userListListener = null
+    }
+    
+    fun isConnected(): Boolean {
+        // Check both our flag and the actual WebSocket state
+        val socketOpen = webSocket?.let { 
+            try {
+                // WebSocket is ready if we can send ping - this is a best effort check
+                true
+            } catch (e: Exception) {
+                false
+            }
+        } ?: false
+        return isConnected && socketOpen
+    }
+    
+    fun forceReconnect(serverUrl: String, userId: String) {
+        Log.d(TAG, "Force reconnecting...")
+        // Close existing connection
+        webSocket?.close(1000, "Force reconnect")
+        webSocket = null
+        isConnected = false
+        
+        // Reconnect
+        currentUserId = userId
+        val request = Request.Builder().url(serverUrl).build()
+        webSocket = client.newWebSocket(request, socketListener)
+    }
 }

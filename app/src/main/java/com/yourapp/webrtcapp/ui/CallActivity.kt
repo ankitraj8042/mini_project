@@ -3,15 +3,25 @@ package com.yourapp.webrtcapp.ui
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.view.animation.AccelerateDecelerateInterpolator
+import android.view.animation.AlphaAnimation
+import android.view.animation.Animation
+import android.animation.AnimatorSet
+import android.animation.ObjectAnimator
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -47,9 +57,15 @@ class CallActivity : AppCompatActivity() {
     private lateinit var callStateText: TextView
     private lateinit var networkStatsText: TextView
     private lateinit var networkQualityText: TextView
+    private lateinit var audioOnlyIndicator: TextView
+    private lateinit var emojiOverlay: TextView
+    private lateinit var emojiBar: LinearLayout
     private lateinit var muteBtn: ImageButton
     private lateinit var endCallBtn: ImageButton
     private lateinit var videoToggleBtn: ImageButton
+    private lateinit var speakerBtn: ImageButton
+    private lateinit var audioOnlyBtn: ImageButton
+    private lateinit var switchCameraBtn: ImageButton
     
     // Media tracks
     private var localAudioTrack: AudioTrack? = null
@@ -59,9 +75,16 @@ class CallActivity : AppCompatActivity() {
     private var callState = CallState.IDLE
     private var isMuted = false
     private var isVideoEnabled = true
+    private var isSpeakerOn = true
+    private var isAudioOnlyMode = false
+    private var isVideoCall = true  // Initially video call
     private var networkQuality = NetworkQuality.GOOD
     private var isCaller = false
     private var incomingSdp: String? = null
+    private var isFrontCamera = true
+    
+    // Audio Manager
+    private lateinit var audioManager: AudioManager
     
     // ICE candidates queue (for candidates received before remote description is set)
     private val pendingIceCandidates = mutableListOf<IceCandidate>()
@@ -128,28 +151,43 @@ class CallActivity : AppCompatActivity() {
         myId = intent.getStringExtra("MY_ID") ?: "user1"
         peerId = intent.getStringExtra("PEER_ID") ?: "user2"
         isCaller = intent.getBooleanExtra("IS_CALLER", true)
+        isVideoCall = intent.getBooleanExtra("IS_VIDEO_CALL", true)
         incomingSdp = intent.getStringExtra("INCOMING_SDP")
 
         // Log network information for debugging
         Log.d(TAG, "===========================================")
-        Log.d(TAG, "Starting call: myId=$myId, peerId=$peerId, isCaller=$isCaller")
+        Log.d(TAG, "Starting call: myId=$myId, peerId=$peerId, isCaller=$isCaller, isVideoCall=$isVideoCall")
         Log.d(TAG, "Device IP Address: ${getDeviceIpAddress()}")
         Log.d(TAG, "Network Type: ${getNetworkType()}")
         Log.d(TAG, "===========================================")
+        
+        // Initialize audio manager
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
         localRenderer = findViewById(R.id.localView)
         remoteRenderer = findViewById(R.id.remoteView)
         callStateText = findViewById(R.id.callStateText)
         networkStatsText = findViewById(R.id.networkStatsText)
         networkQualityText = findViewById(R.id.networkQualityText)
+        audioOnlyIndicator = findViewById(R.id.audioOnlyIndicator)
+        emojiOverlay = findViewById(R.id.emojiOverlay)
+        emojiBar = findViewById(R.id.emojiBar)
         muteBtn = findViewById(R.id.muteBtn)
         endCallBtn = findViewById(R.id.endCallBtn)
         videoToggleBtn = findViewById(R.id.videoToggleBtn)
+        speakerBtn = findViewById(R.id.speakerBtn)
+        audioOnlyBtn = findViewById(R.id.audioOnlyBtn)
+        switchCameraBtn = findViewById(R.id.switchCameraBtn)
 
         // Set initial call state text
         callStateText.text = if (isCaller) "Calling $peerId..." else "Incoming call..."
         networkStatsText.text = ""
         networkQualityText.text = ""
+        
+        // If audio-only call, show indicator and hide video views
+        if (!isVideoCall) {
+            enableAudioOnlyMode()
+        }
 
         eglBase = EglBase.create()
         
@@ -163,8 +201,12 @@ class CallActivity : AppCompatActivity() {
         remoteRenderer.setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FIT)
 
         setupUIControls()
+        setupEmojiBar()
         initWebRTC()
         initSignaling()
+        
+        // Set speaker on by default for video calls
+        setSpeakerphone(true)
         
         // Show network info to user
         val deviceIp = getDeviceIpAddress()
@@ -191,9 +233,6 @@ class CallActivity : AppCompatActivity() {
 
     private fun initWebRTC() {
         Log.d(TAG, "Initializing WebRTC")
-        
-        // Log all available network interfaces for debugging
-        logNetworkInterfaces()
         
         PeerConnectionFactory.initialize(
             PeerConnectionFactory.InitializationOptions.builder(this)
@@ -467,7 +506,7 @@ class CallActivity : AppCompatActivity() {
         // Use the shared SignalingManager instead of creating a new connection
         SignalingManager.setCallListener(object : SignalingManager.CallSignalingListener {
 
-            override fun onOfferReceived(from: String, sdp: SessionDescription) {
+            override fun onOfferReceived(from: String, sdp: SessionDescription, isVideoCall: Boolean) {
                 Log.d(TAG, "Offer received from $from (while in call)")
                 // We're already in a call, ignore new offers
             }
@@ -516,6 +555,22 @@ class CallActivity : AppCompatActivity() {
                     finish()
                 }
             }
+            
+            override fun onEmojiReceived(emoji: String) {
+                Log.d(TAG, "========= CallActivity received emoji =========")
+                Log.d(TAG, "Emoji: $emoji")
+                Log.d(TAG, "Current thread: ${Thread.currentThread().name}")
+                Log.d(TAG, "Activity state: isFinishing=$isFinishing, isDestroyed=${if (android.os.Build.VERSION.SDK_INT >= 17) isDestroyed else "N/A"}")
+                runOnUiThread {
+                    Log.d(TAG, "Running on UI thread, showing animation...")
+                    try {
+                        showEmojiAnimation(emoji)
+                        Log.d(TAG, "Animation started successfully")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error showing emoji animation: ${e.message}", e)
+                    }
+                }
+            }
         })
     }
 
@@ -544,7 +599,7 @@ class CallActivity : AppCompatActivity() {
                 peerConnection?.setLocalDescription(object : SimpleSdpObserver() {
                     override fun onSetSuccess() {
                         Log.d(TAG, "Local description (offer) set successfully")
-                        SignalingManager.sendOffer(peerId, offer)
+                        SignalingManager.sendOffer(peerId, offer, isVideoCall)
                     }
                     override fun onSetFailure(error: String) {
                         Log.e(TAG, "Failed to set local description: $error")
@@ -636,7 +691,8 @@ class CallActivity : AppCompatActivity() {
             this,
             videoSource.capturerObserver
         )
-        videoCapturer?.startCapture(640, 480, 30)
+        // Higher resolution for better quality (1280x720 @ 30fps)
+        videoCapturer?.startCapture(1280, 720, 30)
 
         localVideoTrack =
             peerConnectionFactory.createVideoTrack("video_track", videoSource)
@@ -733,6 +789,109 @@ class CallActivity : AppCompatActivity() {
         videoToggleBtn.setOnClickListener {
             toggleVideo()
         }
+        
+        speakerBtn.setOnClickListener {
+            toggleSpeaker()
+        }
+        
+        audioOnlyBtn.setOnClickListener {
+            toggleAudioOnlyMode()
+        }
+        
+        switchCameraBtn.setOnClickListener {
+            switchCamera()
+        }
+    }
+    
+    private fun setupEmojiBar() {
+        val emojis = listOf(
+            R.id.emoji1 to "👍",
+            R.id.emoji2 to "❤️",
+            R.id.emoji3 to "😂",
+            R.id.emoji4 to "😮",
+            R.id.emoji5 to "👏"
+        )
+        
+        emojis.forEach { (viewId, emoji) ->
+            findViewById<TextView>(viewId).setOnClickListener {
+                sendEmoji(emoji)
+            }
+        }
+    }
+    
+    private fun sendEmoji(emoji: String) {
+        SignalingManager.sendEmoji(peerId, emoji)
+        // Don't show locally - emoji only shows on receiver side
+        Toast.makeText(this, "Sent $emoji", Toast.LENGTH_SHORT).show()
+    }
+    
+    private fun showEmojiAnimation(emoji: String) {
+        // Create a new TextView for the bubble animation
+        val emojiView = TextView(this).apply {
+            text = emoji
+            textSize = 80f
+            alpha = 0f
+            scaleX = 0.3f
+            scaleY = 0.3f
+        }
+        
+        // Add to the root view
+        val rootView = findViewById<ViewGroup>(android.R.id.content)
+        rootView.addView(emojiView)
+        
+        // Position at bottom center
+        emojiView.post {
+            val screenHeight = rootView.height
+            val screenWidth = rootView.width
+            
+            emojiView.x = (screenWidth / 2f) - (emojiView.width / 2f)
+            emojiView.y = screenHeight.toFloat() - 100f  // Start from bottom
+            
+            // Target Y - middle of screen
+            val targetY = screenHeight / 2f - (emojiView.height / 2f)
+            
+            // Create animations
+            val fadeIn = ObjectAnimator.ofFloat(emojiView, "alpha", 0f, 1f).apply {
+                duration = 300
+            }
+            
+            val scaleUpX = ObjectAnimator.ofFloat(emojiView, "scaleX", 0.3f, 1.2f, 1f).apply {
+                duration = 500
+            }
+            
+            val scaleUpY = ObjectAnimator.ofFloat(emojiView, "scaleY", 0.3f, 1.2f, 1f).apply {
+                duration = 500
+            }
+            
+            val floatUp = ObjectAnimator.ofFloat(emojiView, "y", emojiView.y, targetY).apply {
+                duration = 1500
+                interpolator = AccelerateDecelerateInterpolator()
+            }
+            
+            val fadeOut = ObjectAnimator.ofFloat(emojiView, "alpha", 1f, 0f).apply {
+                duration = 500
+                startDelay = 1500
+            }
+            
+            // Play animations
+            AnimatorSet().apply {
+                playTogether(fadeIn, scaleUpX, scaleUpY, floatUp)
+                start()
+            }
+            
+            // Start fade out after float up
+            Handler(Looper.getMainLooper()).postDelayed({
+                fadeOut.start()
+                fadeOut.addListener(object : android.animation.Animator.AnimatorListener {
+                    override fun onAnimationStart(animation: android.animation.Animator) {}
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        rootView.removeView(emojiView)
+                    }
+                    override fun onAnimationCancel(animation: android.animation.Animator) {}
+                    override fun onAnimationRepeat(animation: android.animation.Animator) {}
+                })
+            }, 1500)
+        }
     }
 
     private fun toggleMute() {
@@ -745,6 +904,97 @@ class CallActivity : AppCompatActivity() {
         isVideoEnabled = !isVideoEnabled
         localVideoTrack?.setEnabled(isVideoEnabled)
         videoToggleBtn.setImageResource(if (isVideoEnabled) R.drawable.ic_videocam else R.drawable.ic_videocam_off)
+        
+        // Show/hide local preview
+        localRenderer.visibility = if (isVideoEnabled) View.VISIBLE else View.GONE
+    }
+    
+    private fun toggleSpeaker() {
+        isSpeakerOn = !isSpeakerOn
+        setSpeakerphone(isSpeakerOn)
+        speakerBtn.setImageResource(if (isSpeakerOn) R.drawable.ic_speaker else R.drawable.ic_speaker_off)
+        Toast.makeText(this, if (isSpeakerOn) "Speaker ON" else "Speaker OFF", Toast.LENGTH_SHORT).show()
+    }
+    
+    private fun setSpeakerphone(enabled: Boolean) {
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        audioManager.isSpeakerphoneOn = enabled
+    }
+    
+    private fun toggleAudioOnlyMode() {
+        if (isAudioOnlyMode) {
+            disableAudioOnlyMode()
+        } else {
+            // Ask for confirmation before switching to audio-only
+            AlertDialog.Builder(this)
+                .setTitle("Switch to Audio Only?")
+                .setMessage("This will disable video to save bandwidth. You can turn it back on later.")
+                .setPositiveButton("Yes") { _, _ -> enableAudioOnlyMode() }
+                .setNegativeButton("No", null)
+                .show()
+        }
+    }
+    
+    private fun enableAudioOnlyMode() {
+        isAudioOnlyMode = true
+        isVideoEnabled = false
+        
+        // Disable video
+        localVideoTrack?.setEnabled(false)
+        
+        // Hide video views
+        localRenderer.visibility = View.GONE
+        remoteRenderer.visibility = View.GONE
+        
+        // Show audio-only indicator
+        audioOnlyIndicator.visibility = View.VISIBLE
+        
+        // Update buttons
+        audioOnlyBtn.setBackgroundResource(R.drawable.btn_circle_green)
+        videoToggleBtn.isEnabled = false
+        videoToggleBtn.alpha = 0.5f
+        switchCameraBtn.isEnabled = false
+        switchCameraBtn.alpha = 0.5f
+        
+        // Adjust video quality to minimum
+        adjustVideoQuality(NetworkQuality.POOR)
+        
+        Toast.makeText(this, "Audio Only Mode - Video disabled", Toast.LENGTH_SHORT).show()
+    }
+    
+    private fun disableAudioOnlyMode() {
+        isAudioOnlyMode = false
+        isVideoEnabled = true
+        
+        // Enable video
+        localVideoTrack?.setEnabled(true)
+        
+        // Show video views
+        localRenderer.visibility = View.VISIBLE
+        remoteRenderer.visibility = View.VISIBLE
+        
+        // Hide audio-only indicator
+        audioOnlyIndicator.visibility = View.GONE
+        
+        // Update buttons
+        audioOnlyBtn.setBackgroundResource(R.drawable.btn_circle_background)
+        videoToggleBtn.isEnabled = true
+        videoToggleBtn.alpha = 1f
+        switchCameraBtn.isEnabled = true
+        switchCameraBtn.alpha = 1f
+        
+        // Restore video quality
+        adjustVideoQuality(networkQuality)
+        
+        Toast.makeText(this, "Video Enabled", Toast.LENGTH_SHORT).show()
+    }
+    
+    private fun switchCamera() {
+        if (videoCapturer is CameraVideoCapturer) {
+            isFrontCamera = !isFrontCamera
+            (videoCapturer as CameraVideoCapturer).switchCamera(null)
+            localRenderer.setMirror(isFrontCamera)
+        }
     }
 
     private fun endCall() {
@@ -790,42 +1040,41 @@ class CallActivity : AppCompatActivity() {
             var totalPacketsLost = 0L
             var rtt = 0.0
             var currentTimestamp = System.currentTimeMillis()
-            var hasVideoStats = false
 
             for (stats in report.statsMap.values) {
                 when (stats.type) {
                     // Outbound RTP stats for bitrate calculation
                     "outbound-rtp" -> {
-                        val mediaType = stats.members["mediaType"] as? String
-                        if (mediaType == "video") {
-                            hasVideoStats = true
-                            val bytesSent = (stats.members["bytesSent"] as? Number)?.toLong() ?: 0L
-                            val packetsSent = (stats.members["packetsSent"] as? Number)?.toLong() ?: 0L
-                            totalBytesSent += bytesSent
-                            totalPacketsSent += packetsSent
-                        }
+                        // Use "kind" (modern) or fallback to "mediaType" (legacy)
+                        val kind = (stats.members["kind"] as? String) 
+                            ?: (stats.members["mediaType"] as? String)
+                        // Collect both video and audio stats
+                        val bytesSent = (stats.members["bytesSent"] as? Number)?.toLong() ?: 0L
+                        val packetsSent = (stats.members["packetsSent"] as? Number)?.toLong() ?: 0L
+                        totalBytesSent += bytesSent
+                        totalPacketsSent += packetsSent
                     }
                     
                     // Inbound RTP stats
                     "inbound-rtp" -> {
-                        val mediaType = stats.members["mediaType"] as? String
-                        if (mediaType == "video") {
-                            val bytesReceived = (stats.members["bytesReceived"] as? Number)?.toLong() ?: 0L
-                            totalBytesReceived += bytesReceived
-                        }
+                        val kind = (stats.members["kind"] as? String) 
+                            ?: (stats.members["mediaType"] as? String)
+                        // Collect both video and audio stats
+                        val bytesReceived = (stats.members["bytesReceived"] as? Number)?.toLong() ?: 0L
+                        val packetsLost = (stats.members["packetsLost"] as? Number)?.toLong() ?: 0L
+                        totalBytesReceived += bytesReceived
+                        totalPacketsLost += packetsLost
                     }
 
-                    // Remote inbound stats for packet loss
+                    // Remote inbound stats for RTT
                     "remote-inbound-rtp" -> {
-                        val packetsLost = (stats.members["packetsLost"] as? Number)?.toLong() ?: 0L
                         val roundTripTime = (stats.members["roundTripTime"] as? Number)?.toDouble()
                         if (roundTripTime != null && roundTripTime > 0) {
                             rtt = roundTripTime
                         }
-                        totalPacketsLost += packetsLost
                     }
 
-                    // Candidate pair for RTT
+                    // Candidate pair for RTT (more reliable source)
                     "candidate-pair" -> {
                         val state = stats.members["state"] as? String
                         if (state == "succeeded") {
@@ -881,16 +1130,37 @@ class CallActivity : AppCompatActivity() {
     }
 
     private fun updateNetworkQuality(bitrate: Long, packetLoss: Double, rtt: Double) {
+        // Adjusted thresholds for TURN-relay connections (very forgiving)
+        // 500ms RTT is normal for relay, only consider poor if very high loss or RTT > 1s
         val newQuality = when {
-            packetLoss > 5.0 || rtt > 0.3 -> NetworkQuality.POOR
-            packetLoss > 2.0 || rtt > 0.15 -> NetworkQuality.MODERATE
+            packetLoss > 15.0 || rtt > 1.0 -> NetworkQuality.POOR
+            packetLoss > 5.0 || rtt > 0.6 -> NetworkQuality.MODERATE
             else -> NetworkQuality.GOOD
         }
 
         if (newQuality != networkQuality) {
             networkQuality = newQuality
-            adjustVideoQuality(newQuality)
+            
+            // Only suggest audio-only mode if quality becomes poor
+            if (newQuality == NetworkQuality.POOR && !isAudioOnlyMode && isVideoCall) {
+                runOnUiThread {
+                    suggestAudioOnlyMode()
+                }
+            }
+            
+            if (!isAudioOnlyMode) {
+                adjustVideoQuality(newQuality)
+            }
         }
+    }
+    
+    private fun suggestAudioOnlyMode() {
+        AlertDialog.Builder(this)
+            .setTitle("Poor Network Quality")
+            .setMessage("Your network connection is unstable. Would you like to switch to Audio Only mode for better call quality?")
+            .setPositiveButton("Switch to Audio Only") { _, _ -> enableAudioOnlyMode() }
+            .setNegativeButton("Keep Video", null)
+            .show()
     }
 
     private fun updateStatsUI(sendBitrate: Long, receiveBitrate: Long, packetLoss: Double, rttMs: Int) {
@@ -916,10 +1186,11 @@ class CallActivity : AppCompatActivity() {
             if (sender.track()?.kind() == "video") {
                 val parameters = sender.parameters
                 if (parameters.encodings.isNotEmpty()) {
+                    // Bitrates for 720p video (higher for better quality)
                     parameters.encodings[0].maxBitrateBps = when (quality) {
-                        NetworkQuality.GOOD -> 1_500_000
-                        NetworkQuality.MODERATE -> 800_000
-                        NetworkQuality.POOR -> 300_000
+                        NetworkQuality.GOOD -> 2_500_000     // 2.5 Mbps for good networks
+                        NetworkQuality.MODERATE -> 1_200_000 // 1.2 Mbps for moderate
+                        NetworkQuality.POOR -> 500_000       // 500 Kbps for poor
                     }
                     sender.parameters = parameters
                 }
@@ -960,29 +1231,6 @@ class CallActivity : AppCompatActivity() {
     }
 
     // ===================== NETWORK HELPERS =====================
-    
-    private fun logNetworkInterfaces() {
-        Log.d(TAG, "=== NETWORK INTERFACES ===")
-        try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val address = addresses.nextElement()
-                    if (address is Inet4Address) {
-                        Log.d(TAG, "  Interface: ${networkInterface.displayName}")
-                        Log.d(TAG, "    IP: ${address.hostAddress}")
-                        Log.d(TAG, "    isLoopback: ${address.isLoopbackAddress}")
-                        Log.d(TAG, "    isUp: ${networkInterface.isUp}")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error enumerating network interfaces: ${e.message}")
-        }
-        Log.d(TAG, "=========================")
-    }
     
     private fun getDeviceIpAddress(): String {
         try {

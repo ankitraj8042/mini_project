@@ -20,8 +20,10 @@ function sendTo(userId, message) {
   const ws = clients.get(userId);
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(message));
+    return true;
   } else {
     console.log(`User ${userId} not found or disconnected`);
+    return false;
   }
 }
 
@@ -55,12 +57,13 @@ wss.on("connection", (ws) => {
         break;
 
       case "offer":
-        console.log(`Forwarding offer from ${data.from} to ${data.to}`);
+        console.log(`Forwarding offer from ${data.from} to ${data.to} (video: ${data.isVideoCall})`);
         sendTo(data.to, {
           type: "offer",
           from: data.from,
           to: data.to,
-          sdp: data.sdp
+          sdp: data.sdp,
+          isVideoCall: data.isVideoCall !== false  // default to true
         });
         break;
 
@@ -100,6 +103,34 @@ wss.on("connection", (ws) => {
           from: data.from,
           to: data.to
         });
+        break;
+        
+      case "emoji":
+        console.log(`========= EMOJI =========`);
+        console.log(`From: ${data.from}`);
+        console.log(`To: ${data.to}`);
+        console.log(`Emoji: ${data.emoji}`);
+        console.log(`Target user exists: ${clients.has(data.to)}`);
+        const emojiSent = sendTo(data.to, {
+          type: "emoji",
+          from: data.from,
+          to: data.to,
+          emoji: data.emoji
+        });
+        console.log(`Emoji forwarded: ${emojiSent ? 'SUCCESS' : 'FAILED'}`);
+        console.log(`=========================`);
+        break;
+        
+      case "checkUser":
+        // Check if a specific user is online
+        const targetUser = data.userId;
+        const isOnline = clients.has(targetUser);
+        console.log(`Checking user ${targetUser}: ${isOnline ? "online" : "offline"}`);
+        ws.send(JSON.stringify({
+          type: "userStatus",
+          userId: targetUser,
+          online: isOnline
+        }));
         break;
 
       case "getUsers":

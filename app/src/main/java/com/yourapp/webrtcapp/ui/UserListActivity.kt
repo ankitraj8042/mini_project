@@ -118,13 +118,14 @@ class UserListActivity : AppCompatActivity() {
         
         // Set up call listener
         SignalingManager.setCallListener(object : SignalingManager.CallSignalingListener {
-            override fun onOfferReceived(from: String, sdp: SessionDescription) {
-                Log.d(TAG, "Incoming call from $from")
+            override fun onOfferReceived(from: String, sdp: SessionDescription, isVideoCall: Boolean) {
+                Log.d(TAG, "Incoming call from $from (video: $isVideoCall)")
                 runOnUiThread {
                     val intent = Intent(this@UserListActivity, CallActivity::class.java)
                     intent.putExtra("MY_ID", currentUsername)
                     intent.putExtra("PEER_ID", from)
                     intent.putExtra("IS_CALLER", false)
+                    intent.putExtra("IS_VIDEO_CALL", isVideoCall)
                     intent.putExtra("INCOMING_SDP", sdp.description)
                     startActivity(intent)
                 }
@@ -134,6 +135,7 @@ class UserListActivity : AppCompatActivity() {
             override fun onIceCandidateReceived(candidate: IceCandidate) {}
             override fun onCallRejected() {}
             override fun onCallEnded() {}
+            override fun onEmojiReceived(emoji: String) {}
         })
     }
 
