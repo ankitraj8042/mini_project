@@ -1,0 +1,109 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Remote Video (Full Screen) -->
+    <org.webrtc.SurfaceViewRenderer
+        android:id="@+id/remoteView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Local Video (Picture-in-Picture) -->
+    <org.webrtc.SurfaceViewRenderer
+        android:id="@+id/localView"
+        android:layout_width="120dp"
+        android:layout_height="160dp"
+        android:layout_gravity="top|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="100dp" />
+
+    <!-- Call State & Stats (Top) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#80000000">
+
+        <TextView
+            android:id="@+id/callStateText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text="Connecting..."
+            android:textColor="@android:color/white"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/networkStatsText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text=""
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:layout_marginTop="4dp"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:id="@+id/networkQualityText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal"
+            android:text=""
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:layout_marginTop="2dp" />
+
+    </LinearLayout>
+
+    <!-- Control Buttons (Bottom) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingVertical="32dp"
+        android:paddingHorizontal="24dp"
+        android:background="#80000000">
+
+        <ImageButton
+            android:id="@+id/muteBtn"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/btn_circle_background"
+            android:src="@drawable/ic_mic"
+            android:scaleType="centerInside"
+            android:padding="14dp"
+            android:contentDescription="Mute"
+            android:layout_marginHorizontal="16dp" />
+
+        <ImageButton
+            android:id="@+id/endCallBtn"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:background="@drawable/btn_circle_red"
+            android:src="@drawable/ic_call_end"
+            android:scaleType="centerInside"
+            android:padding="16dp"
+            android:contentDescription="End Call"
+            android:layout_marginHorizontal="16dp" />
+
+        <ImageButton
+            android:id="@+id/videoToggleBtn"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/btn_circle_background"
+            android:src="@drawable/ic_videocam"
+            android:scaleType="centerInside"
+            android:padding="14dp"
+            android:contentDescription="Toggle Video"
+            android:layout_marginHorizontal="16dp" />
+
+    </LinearLayout>
+
+</FrameLayout>
