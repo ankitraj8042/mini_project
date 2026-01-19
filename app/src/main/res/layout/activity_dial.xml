@@ -1,113 +1,357 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="24dp"
-    android:background="#FFFFFF">
+    android:background="@color/background">
 
-    <!-- Header -->
+    <!-- Top App Bar - WhatsApp Style -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
+        android:background="@color/primary"
+        android:elevation="4dp">
+
+        <!-- Header Row -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Echoo"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white" />
+
+            <!-- Connection Status -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:background="@drawable/status_chip_background"
+                android:paddingHorizontal="10dp"
+                android:paddingVertical="4dp"
+                android:layout_marginEnd="8dp">
+
+                <View
+                    android:id="@+id/connectionDot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="@drawable/status_dot_online" />
+
+                <TextView
+                    android:id="@+id/connectionStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Online"
+                    android:textSize="11sp"
+                    android:textColor="@android:color/white"
+                    android:layout_marginStart="4dp" />
+
+            </LinearLayout>
+
+            <!-- Settings/Logout -->
+            <ImageButton
+                android:id="@+id/logoutBtn"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@drawable/ic_logout"
+                android:contentDescription="Logout"
+                app:tint="@android:color/white" />
+
+        </LinearLayout>
+
+        <!-- Tab Layout -->
+        <com.google.android.material.tabs.TabLayout
+            android:id="@+id/tabLayout"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            app:tabIndicatorColor="@android:color/white"
+            app:tabIndicatorHeight="3dp"
+            app:tabSelectedTextColor="@android:color/white"
+            app:tabTextColor="@color/tab_unselected"
+            app:tabMode="fixed"
+            app:tabGravity="fill">
+
+            <com.google.android.material.tabs.TabItem
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="KEYPAD" />
+
+            <com.google.android.material.tabs.TabItem
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RECENTS" />
+
+            <com.google.android.material.tabs.TabItem
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="CONTACTS" />
+
+        </com.google.android.material.tabs.TabLayout>
+
+    </LinearLayout>
+    
+    <!-- Network Info Bar (AI-Driven) -->
+    <TextView
+        android:id="@+id/networkInfoText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="📶 Detecting network..."
+        android:textSize="12sp"
+        android:textColor="#666666"
+        android:background="#F5F5F5"
         android:gravity="center"
-        android:layout_marginTop="32dp"
-        android:layout_marginBottom="32dp">
+        android:paddingVertical="6dp" />
+
+    <!-- ViewPager for Tabs -->
+    <FrameLayout
+        android:id="@+id/contentFrame"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <!-- Keypad Tab Content -->
+        <LinearLayout
+            android:id="@+id/keypadTab"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="visible">
+
+            <!-- Phone Number Display -->
+            <TextView
+                android:id="@+id/phoneDisplay"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text=""
+                android:textSize="32sp"
+                android:textColor="@color/text_primary"
+                android:gravity="center"
+                android:paddingVertical="24dp"
+                android:minHeight="80dp"
+                android:fontFamily="sans-serif-light" />
+
+            <!-- Dialpad Grid -->
+            <GridLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:columnCount="3"
+                android:rowCount="4"
+                android:paddingHorizontal="32dp"
+                android:useDefaultMargins="true">
+
+                <TextView android:id="@+id/key1" style="@style/DialpadKey" android:text="1" />
+                <TextView android:id="@+id/key2" style="@style/DialpadKey" android:text="2" />
+                <TextView android:id="@+id/key3" style="@style/DialpadKey" android:text="3" />
+                <TextView android:id="@+id/key4" style="@style/DialpadKey" android:text="4" />
+                <TextView android:id="@+id/key5" style="@style/DialpadKey" android:text="5" />
+                <TextView android:id="@+id/key6" style="@style/DialpadKey" android:text="6" />
+                <TextView android:id="@+id/key7" style="@style/DialpadKey" android:text="7" />
+                <TextView android:id="@+id/key8" style="@style/DialpadKey" android:text="8" />
+                <TextView android:id="@+id/key9" style="@style/DialpadKey" android:text="9" />
+                <TextView android:id="@+id/keyStar" style="@style/DialpadKey" android:text="*" />
+                <TextView android:id="@+id/key0" style="@style/DialpadKey" android:text="0" />
+                <TextView android:id="@+id/keyHash" style="@style/DialpadKey" android:text="#" />
+
+            </GridLayout>
+
+            <!-- Call Buttons Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center"
+                android:padding="16dp">
+
+                <!-- Video Call Button -->
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/videoCallBtn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:src="@drawable/ic_videocam"
+                    app:backgroundTint="@color/primary"
+                    app:tint="@android:color/white"
+                    android:layout_marginEnd="24dp"
+                    android:contentDescription="Video Call" />
+
+                <!-- Audio Call Button -->
+                <com.google.android.material.floatingactionbutton.FloatingActionButton
+                    android:id="@+id/audioCallBtn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:src="@drawable/ic_call"
+                    app:backgroundTint="@color/success"
+                    app:tint="@android:color/white"
+                    app:fabSize="normal"
+                    android:contentDescription="Voice Call" />
+
+                <!-- Backspace Button -->
+                <ImageButton
+                    android:id="@+id/backspaceBtn"
+                    android:layout_width="56dp"
+                    android:layout_height="56dp"
+                    android:layout_marginStart="24dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:src="@drawable/ic_backspace"
+                    app:tint="@color/text_secondary"
+                    android:contentDescription="Backspace" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Recents Tab Content -->
+        <LinearLayout
+            android:id="@+id/recentsTab"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recentsRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:padding="8dp" />
+
+            <!-- Empty State -->
+            <LinearLayout
+                android:id="@+id/recentsEmptyState"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📞"
+                    android:textSize="48sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="No recent calls"
+                    android:textSize="16sp"
+                    android:textColor="@color/text_secondary" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- Contacts Tab Content -->
+        <FrameLayout
+            android:id="@+id/contactsTab"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:orientation="vertical">
+
+                <!-- Search Bar -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_margin="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+                    app:boxCornerRadiusTopStart="24dp"
+                    app:boxCornerRadiusTopEnd="24dp"
+                    app:boxCornerRadiusBottomStart="24dp"
+                    app:boxCornerRadiusBottomEnd="24dp"
+                    app:hintEnabled="false"
+                    app:boxStrokeWidth="0dp"
+                    app:boxBackgroundColor="@color/search_background">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/searchInput"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="🔍 Search contacts..."
+                        android:inputType="text"
+                        android:textSize="14sp"
+                        android:paddingVertical="12dp" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- Online Users Section -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="ONLINE NOW"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/primary"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="8dp" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/contactsRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false" />
+
+            </LinearLayout>
+
+            <!-- Add Contact FAB -->
+            <com.google.android.material.floatingactionbutton.FloatingActionButton
+                android:id="@+id/addContactBtn"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="16dp"
+                android:src="@drawable/ic_add"
+                app:backgroundTint="@color/primary"
+                app:tint="@android:color/white"
+                android:contentDescription="Add Contact" />
+
+        </FrameLayout>
+
+    </FrameLayout>
+
+    <!-- Bottom Info Bar -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:padding="8dp"
+        android:background="@color/surface">
 
         <TextView
             android:id="@+id/myPhoneText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Your number: "
-            android:textSize="14sp"
-            android:textColor="#666666" />
+            android:textSize="12sp"
+            android:textColor="@color/text_hint" />
 
         <TextView
-            android:id="@+id/connectionStatus"
+            android:id="@+id/myNameText"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="● Connecting..."
+            android:text=""
             android:textSize="12sp"
-            android:textColor="#FFA000"
-            android:layout_marginTop="4dp" />
-
-    </LinearLayout>
-
-    <!-- Dial Input -->
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Enter phone number to call"
-        android:textSize="16sp"
-        android:textColor="#333333"
-        android:layout_marginBottom="8dp" />
-
-    <com.google.android.material.textfield.TextInputLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Phone Number"
-        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
-        android:layout_marginBottom="24dp">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/dialPhoneInput"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="phone"
-            android:maxLength="10"
-            android:textSize="24sp"
-            android:gravity="center"
-            android:letterSpacing="0.1" />
-
-    </com.google.android.material.textfield.TextInputLayout>
-
-    <!-- Call Buttons -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:layout_marginBottom="24dp">
-
-        <Button
-            android:id="@+id/videoCallBtn"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="📹 Video Call"
-            android:textAllCaps="false"
-            android:backgroundTint="#6200EE"
-            android:layout_marginEnd="8dp" />
-
-        <Button
-            android:id="@+id/audioCallBtn"
-            android:layout_width="0dp"
-            android:layout_height="56dp"
-            android:layout_weight="1"
-            android:text="📞 Audio Call"
-            android:textAllCaps="false"
-            android:backgroundTint="#03DAC5"
+            android:textColor="@color/text_secondary"
             android:layout_marginStart="8dp" />
 
     </LinearLayout>
-
-    <!-- Status message -->
-    <TextView
-        android:id="@+id/statusMessage"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text=""
-        android:textSize="14sp"
-        android:textColor="#F44336"
-        android:gravity="center"
-        android:layout_marginTop="16dp"
-        android:visibility="gone" />
-
-    <!-- Spacer -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1" />
 
 </LinearLayout>

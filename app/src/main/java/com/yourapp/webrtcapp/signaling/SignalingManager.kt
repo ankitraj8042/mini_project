@@ -31,17 +31,27 @@ object SignalingManager {
     // Callbacks for checkUserOnline
     private val userCheckCallbacks = mutableMapOf<String, (Boolean) -> Unit>()
     
+    // Current active call ID from server
+    private var currentCallId: String? = null
+    
     // Listeners
     private var callListener: CallSignalingListener? = null
     private var userListListener: UserListListener? = null
     
     interface CallSignalingListener {
-        fun onOfferReceived(from: String, sdp: SessionDescription, isVideoCall: Boolean)
-        fun onAnswerReceived(sdp: SessionDescription)
+        fun onOfferReceived(from: String, sdp: SessionDescription, isVideoCall: Boolean, callId: String)
+        fun onAnswerReceived(sdp: SessionDescription, callId: String)
         fun onIceCandidateReceived(candidate: IceCandidate)
         fun onCallRejected()
         fun onCallEnded()
         fun onEmojiReceived(emoji: String)
+        fun onChatMessageReceived(message: String) {}  // Default empty implementation
+    }
+    
+    fun getCurrentCallId(): String? = currentCallId
+    
+    fun setCurrentCallId(callId: String?) {
+        currentCallId = callId
     }
     
     interface UserListListener {
@@ -104,12 +114,15 @@ object SignalingManager {
                         val from = jsonObject.get("from")?.asString ?: "unknown"
                         val sdp = jsonObject.get("sdp")?.asString
                         val isVideo = jsonObject.get("isVideoCall")?.asBoolean ?: true
-                        Log.d(TAG, "Offer received from $from (video: $isVideo)")
+                        val callId = jsonObject.get("callId")?.asString ?: ""
+                        Log.d(TAG, "Offer received from $from (video: $isVideo, callId: $callId)")
+                        currentCallId = callId  // Store server's callId
                         if (sdp != null) {
                             callListener?.onOfferReceived(
                                 from,
                                 SessionDescription(SessionDescription.Type.OFFER, sdp),
-                                isVideo
+                                isVideo,
+                                callId
                             )
                         }
                     }
@@ -117,10 +130,13 @@ object SignalingManager {
                     "answer" -> {
                         val from = jsonObject.get("from")?.asString
                         val sdp = jsonObject.get("sdp")?.asString
-                        Log.d(TAG, "Answer received from $from")
+                        val callId = jsonObject.get("callId")?.asString ?: currentCallId ?: ""
+                        Log.d(TAG, "Answer received from $from (callId: $callId)")
+                        if (callId.isNotEmpty()) currentCallId = callId
                         if (sdp != null) {
                             callListener?.onAnswerReceived(
-                                SessionDescription(SessionDescription.Type.ANSWER, sdp)
+                                SessionDescription(SessionDescription.Type.ANSWER, sdp),
+                                callId
                             )
                         }
                     }
@@ -172,6 +188,15 @@ object SignalingManager {
                             Log.e(TAG, "Cannot dispatch emoji - emoji: $emoji, listener: $callListener")
                         }
                         Log.d(TAG, "==================================")
+                    }
+                    
+                    "chat" -> {
+                        val from = jsonObject.get("from")?.asString
+                        val message = jsonObject.get("message")?.asString
+                        Log.d(TAG, "Chat message received from $from: $message")
+                        if (message != null) {
+                            callListener?.onChatMessageReceived(message)
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -233,12 +258,13 @@ object SignalingManager {
         send(msg)
     }
 
-    fun sendAnswer(to: String, sdp: SessionDescription) {
+    fun sendAnswer(to: String, sdp: SessionDescription, callId: String? = null) {
         val msg = mapOf(
             "type" to "answer",
             "from" to currentUserId,
             "to" to to,
-            "sdp" to sdp.description
+            "sdp" to sdp.description,
+            "callId" to (callId ?: currentCallId ?: "")
         )
         send(msg)
     }
@@ -257,22 +283,47 @@ object SignalingManager {
         send(msg)
     }
 
-    fun sendReject(to: String) {
+    fun sendReject(to: String, callId: String? = null) {
         val msg = mapOf(
             "type" to "reject",
             "from" to currentUserId,
-            "to" to to
+            "to" to to,
+            "callId" to (callId ?: currentCallId ?: "")
         )
         send(msg)
+        currentCallId = null  // Clear after reject
     }
 
-    fun sendHangup(to: String) {
+    fun sendHangup(to: String, callId: String? = null) {
         val msg = mapOf(
             "type" to "hangup",
             "from" to currentUserId,
-            "to" to to
+            "to" to to,
+            "callId" to (callId ?: currentCallId ?: "")
         )
         send(msg)
+        currentCallId = null  // Clear after hangup
+    }
+    
+    fun sendCallStats(statsPayload: org.json.JSONObject) {
+        try {
+            // Convert JSONObject to Map for Gson serialization
+            val statsMap = mutableMapOf<String, Any>()
+            statsMap["type"] = "callStats"
+            statsMap["from"] = currentUserId ?: ""
+            
+            // Add all fields from the JSON payload
+            val keys = statsPayload.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                statsMap[key] = statsPayload.get(key)
+            }
+            
+            send(statsMap)
+            Log.d(TAG, "Call stats sent to server")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending call stats: ${e.message}")
+        }
     }
 
     fun requestUserList() {
@@ -315,6 +366,16 @@ object SignalingManager {
             "from" to currentUserId,
             "to" to to,
             "emoji" to emoji
+        )
+        send(msg)
+    }
+    
+    fun sendChatMessage(to: String, message: String) {
+        val msg = mapOf(
+            "type" to "chat",
+            "from" to currentUserId,
+            "to" to to,
+            "message" to message
         )
         send(msg)
     }

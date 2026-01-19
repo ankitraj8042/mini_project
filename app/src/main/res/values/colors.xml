@@ -2,4 +2,56 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    
+    <!-- Primary Colors - Modern Blue/Purple gradient -->
+    <color name="primary">#6366F1</color>
+    <color name="primary_dark">#4F46E5</color>
+    <color name="primary_light">#818CF8</color>
+    <color name="primary_variant">#4338CA</color>
+    
+    <!-- Secondary Colors -->
+    <color name="secondary">#10B981</color>
+    <color name="secondary_dark">#059669</color>
+    <color name="secondary_light">#34D399</color>
+    
+    <!-- Accent Colors -->
+    <color name="accent">#F59E0B</color>
+    <color name="accent_red">#EF4444</color>
+    <color name="accent_green">#22C55E</color>
+    <color name="accent_blue">#3B82F6</color>
+    
+    <!-- Background Colors -->
+    <color name="background">#F8FAFC</color>
+    <color name="background_dark">#0F172A</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="surface_dark">#1E293B</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#1E293B</color>
+    <color name="text_secondary">#64748B</color>
+    <color name="text_hint">#94A3B8</color>
+    <color name="text_on_primary">#FFFFFF</color>
+    
+    <!-- Status Colors -->
+    <color name="online">#22C55E</color>
+    <color name="offline">#94A3B8</color>
+    <color name="busy">#EF4444</color>
+    <color name="away">#F59E0B</color>
+    <color name="success">#22C55E</color>
+    <color name="error">#EF4444</color>
+    <color name="warning">#F59E0B</color>
+    
+    <!-- Card and Divider -->
+    <color name="card_background">#FFFFFF</color>
+    <color name="divider">#E2E8F0</color>
+    <color name="ripple">#1A6366F1</color>
+    
+    <!-- Tab Colors -->
+    <color name="tab_unselected">#B0BEC5</color>
+    <color name="search_background">#F1F5F9</color>
+    <color name="dialpad_key_bg">#F8FAFC</color>
+    
+    <!-- Gradient Colors -->
+    <color name="gradient_start">#6366F1</color>
+    <color name="gradient_end">#8B5CF6</color>
 </resources>

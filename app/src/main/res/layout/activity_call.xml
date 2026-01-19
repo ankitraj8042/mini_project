@@ -1,4 +1,5 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000">
@@ -16,7 +17,7 @@
         android:layout_height="160dp"
         android:layout_gravity="top|end"
         android:layout_marginEnd="16dp"
-        android:layout_marginTop="100dp" />
+        android:layout_marginTop="80dp" />
 
     <!-- Emoji Display Overlay -->
     <TextView
@@ -27,63 +28,166 @@
         android:textSize="100sp"
         android:visibility="gone" />
 
-    <!-- Call State & Stats (Top) -->
+    <!-- ========== TOP SECTION - Collapsible Stats ========== -->
     <LinearLayout
+        android:id="@+id/statsContainer"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_gravity="top"
         android:orientation="vertical"
-        android:padding="16dp"
         android:background="#80000000">
 
-        <TextView
-            android:id="@+id/callStateText"
-            android:layout_width="wrap_content"
+        <!-- Main Header (Always Visible) - Tap to expand -->
+        <LinearLayout
+            android:id="@+id/statsHeader"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:text="Connecting..."
-            android:textColor="@android:color/white"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:padding="12dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground">
 
-        <TextView
-            android:id="@+id/networkStatsText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:text=""
-            android:textColor="@android:color/white"
-            android:textSize="12sp"
-            android:layout_marginTop="4dp"
-            android:fontFamily="monospace" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/networkQualityText"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:text=""
-            android:textColor="@android:color/white"
-            android:textSize="12sp"
-            android:layout_marginTop="2dp" />
+                <TextView
+                    android:id="@+id/callStateText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Connecting..."
+                    android:textColor="@android:color/white"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
 
-        <!-- Audio Only Mode Indicator -->
-        <TextView
-            android:id="@+id/audioOnlyIndicator"
-            android:layout_width="wrap_content"
+                <!-- Call Quality Indicator (Always shown) -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginTop="2dp">
+
+                    <TextView
+                        android:id="@+id/callQualityText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📶 Excellent"
+                        android:textColor="#4CAF50"
+                        android:textSize="12sp" />
+
+                    <TextView
+                        android:id="@+id/callDurationText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text=" • 00:00"
+                        android:textColor="#BBBBBB"
+                        android:textSize="12sp" />
+
+                </LinearLayout>
+
+            </LinearLayout>
+
+            <!-- Expand/Collapse Arrow -->
+            <ImageView
+                android:id="@+id/statsExpandArrow"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_expand_more"
+                app:tint="@android:color/white" />
+
+        </LinearLayout>
+
+        <!-- Expandable Stats Details -->
+        <LinearLayout
+            android:id="@+id/statsDetails"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:text="📞 Audio Only Mode"
-            android:textColor="#FFC107"
-            android:textSize="14sp"
-            android:layout_marginTop="4dp"
-            android:visibility="gone" />
+            android:orientation="vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#40FFFFFF"
+                android:layout_marginBottom="8dp" />
+
+            <TextView
+                android:id="@+id/networkStatsText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="↑ 0 kbps  ↓ 0 kbps"
+                android:textColor="@android:color/white"
+                android:textSize="11sp"
+                android:fontFamily="monospace" />
+
+            <TextView
+                android:id="@+id/networkQualityText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="RTT: -- | Loss: --%"
+                android:textColor="@android:color/white"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+
+            <TextView
+                android:id="@+id/networkTypeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Network: Detecting..."
+                android:textColor="#BBBBBB"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+
+            <TextView
+                android:id="@+id/dataUsageText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Data: 0.00 MB"
+                android:textColor="#4CAF50"
+                android:textSize="11sp"
+                android:layout_marginTop="2dp" />
+
+            <!-- Audio Only Mode Indicator -->
+            <TextView
+                android:id="@+id/audioOnlyIndicator"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📞 Audio Only Mode"
+                android:textColor="#FFC107"
+                android:textSize="12sp"
+                android:layout_marginTop="4dp"
+                android:visibility="gone" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
-    <!-- Emoji Reaction Bar (Middle Right) -->
+    <!-- ========== LEFT SIDE - Chat Messages ========== -->
     <LinearLayout
-        android:id="@+id/emojiBar"
+        android:id="@+id/chatContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|start"
+        android:layout_marginStart="8dp"
+        android:orientation="vertical"
+        android:background="#80000000"
+        android:padding="8dp"
+        android:visibility="gone">
+
+        <!-- Chat feature removed -->
+
+    </LinearLayout>
+
+    <!-- ========== RIGHT SIDE - Collapsible Emoji Bar ========== -->
+    <LinearLayout
+        android:id="@+id/emojiContainer"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="center_vertical|end"
@@ -92,59 +196,103 @@
         android:background="#80000000"
         android:padding="8dp">
 
+        <!-- Emoji Toggle Button (Always Visible) -->
         <TextView
-            android:id="@+id/emoji1"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:text="👍"
+            android:id="@+id/emojiToggle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:text="😊"
             android:textSize="24sp"
             android:gravity="center"
             android:clickable="true"
-            android:focusable="true" />
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless" />
 
-        <TextView
-            android:id="@+id/emoji2"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:text="❤️"
-            android:textSize="24sp"
-            android:gravity="center"
-            android:clickable="true"
-            android:focusable="true" />
+        <!-- Expandable Emoji List -->
+        <LinearLayout
+            android:id="@+id/emojiList"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
 
-        <TextView
-            android:id="@+id/emoji3"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:text="😂"
-            android:textSize="24sp"
-            android:gravity="center"
-            android:clickable="true"
-            android:focusable="true" />
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#40FFFFFF"
+                android:layout_marginVertical="4dp" />
 
-        <TextView
-            android:id="@+id/emoji4"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:text="😮"
-            android:textSize="24sp"
-            android:gravity="center"
-            android:clickable="true"
-            android:focusable="true" />
+            <TextView
+                android:id="@+id/emoji1"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="👍"
+                android:textSize="24sp"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless" />
 
-        <TextView
-            android:id="@+id/emoji5"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:text="👏"
-            android:textSize="24sp"
-            android:gravity="center"
-            android:clickable="true"
-            android:focusable="true" />
+            <TextView
+                android:id="@+id/emoji2"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="❤️"
+                android:textSize="24sp"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+            <TextView
+                android:id="@+id/emoji3"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="😂"
+                android:textSize="24sp"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+            <TextView
+                android:id="@+id/emoji4"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="😮"
+                android:textSize="24sp"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+            <TextView
+                android:id="@+id/emoji5"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="👏"
+                android:textSize="24sp"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+            <TextView
+                android:id="@+id/emoji6"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:text="🎉"
+                android:textSize="24sp"
+                android:gravity="center"
+                android:clickable="true"
+                android:focusable="true"
+                android:background="?attr/selectableItemBackgroundBorderless" />
+
+        </LinearLayout>
 
     </LinearLayout>
 
-    <!-- Control Buttons (Bottom) -->
+    <!-- ========== BOTTOM SECTION - Control Buttons ========== -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -154,7 +302,7 @@
         android:paddingHorizontal="16dp"
         android:background="#80000000">
 
-        <!-- Top Row: Speaker, Audio-Only Toggle -->
+        <!-- Top Row: Speaker, Audio-Only, Switch Camera -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -164,36 +312,47 @@
 
             <ImageButton
                 android:id="@+id/speakerBtn"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="@drawable/btn_circle_background"
                 android:src="@drawable/ic_speaker"
                 android:scaleType="centerInside"
-                android:padding="12dp"
+                android:padding="10dp"
                 android:contentDescription="Speaker"
-                android:layout_marginHorizontal="12dp" />
+                android:layout_marginHorizontal="6dp" />
 
             <ImageButton
                 android:id="@+id/audioOnlyBtn"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="@drawable/btn_circle_background"
                 android:src="@drawable/ic_audioonly"
                 android:scaleType="centerInside"
-                android:padding="12dp"
+                android:padding="10dp"
                 android:contentDescription="Audio Only"
-                android:layout_marginHorizontal="12dp" />
+                android:layout_marginHorizontal="6dp" />
+
+            <ImageButton
+                android:id="@+id/qualityBtn"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:background="@drawable/btn_circle_background"
+                android:src="@drawable/ic_quality"
+                android:scaleType="centerInside"
+                android:padding="10dp"
+                android:contentDescription="Video Quality"
+                android:layout_marginHorizontal="6dp" />
 
             <ImageButton
                 android:id="@+id/switchCameraBtn"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
                 android:background="@drawable/btn_circle_background"
                 android:src="@drawable/ic_switch_camera"
                 android:scaleType="centerInside"
                 android:padding="12dp"
                 android:contentDescription="Switch Camera"
-                android:layout_marginHorizontal="12dp" />
+                android:layout_marginHorizontal="6dp" />
 
         </LinearLayout>
 

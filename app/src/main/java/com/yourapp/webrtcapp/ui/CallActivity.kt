@@ -57,15 +57,26 @@ class CallActivity : AppCompatActivity() {
     private lateinit var callStateText: TextView
     private lateinit var networkStatsText: TextView
     private lateinit var networkQualityText: TextView
+    private lateinit var networkTypeText: TextView
+    private lateinit var dataUsageText: TextView
     private lateinit var audioOnlyIndicator: TextView
     private lateinit var emojiOverlay: TextView
-    private lateinit var emojiBar: LinearLayout
+    private lateinit var emojiList: LinearLayout
+    private lateinit var emojiToggle: TextView
+    private lateinit var statsHeader: LinearLayout
+    private lateinit var statsDetails: LinearLayout
+    private lateinit var statsExpandArrow: android.widget.ImageView
     private lateinit var muteBtn: ImageButton
     private lateinit var endCallBtn: ImageButton
     private lateinit var videoToggleBtn: ImageButton
     private lateinit var speakerBtn: ImageButton
     private lateinit var audioOnlyBtn: ImageButton
     private lateinit var switchCameraBtn: ImageButton
+    private lateinit var qualityBtn: ImageButton
+    
+    // UI State
+    private var isStatsExpanded = false
+    private var isEmojiListVisible = false
     
     // Media tracks
     private var localAudioTrack: AudioTrack? = null
@@ -80,6 +91,8 @@ class CallActivity : AppCompatActivity() {
     private var isVideoCall = true  // Initially video call
     private var networkQuality = NetworkQuality.GOOD
     private var isCaller = false
+    private var isAutoQuality = true  // Default to auto quality
+    private var currentVideoResolution = "720p"  // Track current resolution
     private var incomingSdp: String? = null
     private var isFrontCamera = true
     
@@ -97,6 +110,23 @@ class CallActivity : AppCompatActivity() {
     private var lastTimestamp = 0L
     private var lastPacketsSent = 0L
     private var lastPacketsLost = 0L
+    private var totalDataUsedBytes = 0L  // Track cumulative data usage
+    
+    // Real-time stats collection for saving to database
+    private val statsSamples = mutableListOf<StatsSample>()
+    private var callStartTime = 0L
+    private var currentCallId: String? = null
+    
+    // Data class for stats samples
+    data class StatsSample(
+        val timestamp: Long,
+        val sendBitrateKbps: Long,
+        val receiveBitrateKbps: Long,
+        val packetLossPercent: Double,
+        val rttMs: Int,
+        val networkQuality: String,
+        val dataUsedBytes: Long
+    )
 
     // ===================== PERMISSIONS =====================
 
@@ -153,6 +183,9 @@ class CallActivity : AppCompatActivity() {
         isCaller = intent.getBooleanExtra("IS_CALLER", true)
         isVideoCall = intent.getBooleanExtra("IS_VIDEO_CALL", true)
         incomingSdp = intent.getStringExtra("INCOMING_SDP")
+        
+        // Get callId from intent (for incoming calls) or SignalingManager
+        currentCallId = intent.getStringExtra("CALL_ID") ?: SignalingManager.getCurrentCallId()
 
         // Log network information for debugging
         Log.d(TAG, "===========================================")
@@ -169,15 +202,22 @@ class CallActivity : AppCompatActivity() {
         callStateText = findViewById(R.id.callStateText)
         networkStatsText = findViewById(R.id.networkStatsText)
         networkQualityText = findViewById(R.id.networkQualityText)
+        networkTypeText = findViewById(R.id.networkTypeText)
+        dataUsageText = findViewById(R.id.dataUsageText)
         audioOnlyIndicator = findViewById(R.id.audioOnlyIndicator)
         emojiOverlay = findViewById(R.id.emojiOverlay)
-        emojiBar = findViewById(R.id.emojiBar)
+        emojiList = findViewById(R.id.emojiList)
+        emojiToggle = findViewById(R.id.emojiToggle)
+        statsHeader = findViewById(R.id.statsHeader)
+        statsDetails = findViewById(R.id.statsDetails)
+        statsExpandArrow = findViewById(R.id.statsExpandArrow)
         muteBtn = findViewById(R.id.muteBtn)
         endCallBtn = findViewById(R.id.endCallBtn)
         videoToggleBtn = findViewById(R.id.videoToggleBtn)
         speakerBtn = findViewById(R.id.speakerBtn)
         audioOnlyBtn = findViewById(R.id.audioOnlyBtn)
         switchCameraBtn = findViewById(R.id.switchCameraBtn)
+        qualityBtn = findViewById(R.id.qualityBtn)
 
         // Set initial call state text
         callStateText.text = if (isCaller) "Calling $peerId..." else "Incoming call..."
@@ -398,6 +438,9 @@ class CallActivity : AppCompatActivity() {
                         runOnUiThread {
                             track.setEnabled(true)
                             track.addSink(remoteRenderer)
+                            // Ensure remote renderer is visible when we receive video
+                            remoteRenderer.visibility = View.VISIBLE
+                            Log.d(TAG, "Remote video track added and renderer visible")
                         }
                     } else if (track is AudioTrack) {
                         Log.d(TAG, "Remote audio track received")
@@ -472,6 +515,9 @@ class CallActivity : AppCompatActivity() {
                             Log.d(TAG, "Adding video track from stream to renderer")
                             videoTrack.setEnabled(true)
                             videoTrack.addSink(remoteRenderer)
+                            // Ensure remote renderer is visible
+                            remoteRenderer.visibility = View.VISIBLE
+                            Log.d(TAG, "Remote video from stream added, renderer visible")
                         }
                         if (stream.audioTracks.isNotEmpty()) {
                             val audioTrack = stream.audioTracks[0]
@@ -506,13 +552,15 @@ class CallActivity : AppCompatActivity() {
         // Use the shared SignalingManager instead of creating a new connection
         SignalingManager.setCallListener(object : SignalingManager.CallSignalingListener {
 
-            override fun onOfferReceived(from: String, sdp: SessionDescription, isVideoCall: Boolean) {
-                Log.d(TAG, "Offer received from $from (while in call)")
+            override fun onOfferReceived(from: String, sdp: SessionDescription, isVideoCall: Boolean, callId: String) {
+                Log.d(TAG, "Offer received from $from (while in call, callId: $callId)")
                 // We're already in a call, ignore new offers
             }
 
-            override fun onAnswerReceived(sdp: SessionDescription) {
-                Log.d(TAG, "Answer received")
+            override fun onAnswerReceived(sdp: SessionDescription, callId: String) {
+                Log.d(TAG, "Answer received (callId: $callId)")
+                // Store the server's callId
+                currentCallId = callId
                 runOnUiThread {
                     updateCallState(CallState.CONNECTED)
                 }
@@ -618,18 +666,20 @@ class CallActivity : AppCompatActivity() {
             Log.d(TAG, "Handling incoming call from $peerId")
             updateCallState(CallState.RINGING)
             val sessionDescription = SessionDescription(SessionDescription.Type.OFFER, sdp)
-            IncomingCallDialog(
-                this,
-                peerId,
-                onAccept = {
+            
+            AlertDialog.Builder(this)
+                .setTitle("Incoming Call")
+                .setMessage("$peerId is calling you...")
+                .setCancelable(false)
+                .setPositiveButton("Accept") { _, _ ->
                     acceptIncomingCall(sessionDescription)
-                },
-                onReject = {
+                }
+                .setNegativeButton("Reject") { _, _ ->
                     SignalingManager.sendReject(peerId)
                     updateCallState(CallState.ENDED)
                     finish()
                 }
-            ).show()
+                .show()
         }
     }
 
@@ -662,7 +712,7 @@ class CallActivity : AppCompatActivity() {
                 peerConnection?.setLocalDescription(object : SimpleSdpObserver() {
                     override fun onSetSuccess() {
                         Log.d(TAG, "Local description (answer) set successfully")
-                        SignalingManager.sendAnswer(peerId, answer)
+                        SignalingManager.sendAnswer(peerId, answer, currentCallId)
                     }
                     override fun onSetFailure(error: String) {
                         Log.e(TAG, "Failed to set local description: $error")
@@ -800,6 +850,99 @@ class CallActivity : AppCompatActivity() {
         
         switchCameraBtn.setOnClickListener {
             switchCamera()
+        }
+        
+        qualityBtn.setOnClickListener {
+            showQualityPicker()
+        }
+        
+        statsHeader.setOnClickListener {
+            toggleStatsExpanded()
+        }
+        
+        emojiToggle.setOnClickListener {
+            toggleEmojiList()
+        }
+    }
+    
+    private fun toggleStatsExpanded() {
+        isStatsExpanded = !isStatsExpanded
+        if (isStatsExpanded) {
+            statsDetails.visibility = View.VISIBLE
+            statsExpandArrow.rotation = 180f
+        } else {
+            statsDetails.visibility = View.GONE
+            statsExpandArrow.rotation = 0f
+        }
+    }
+    
+    private fun toggleEmojiList() {
+        isEmojiListVisible = !isEmojiListVisible
+        emojiList.visibility = if (isEmojiListVisible) View.VISIBLE else View.GONE
+    }
+    
+    private fun showQualityPicker() {
+        val qualities = arrayOf(
+            "Low (240p) - Save Data",
+            "Medium (360p)",
+            "High (480p) - Best Quality",
+            "Auto (Recommended)"
+        )
+        
+        // Default to Auto (index 3) if auto quality is enabled
+        var selectedIndex = if (isAutoQuality) 3 else when (networkQuality) {
+            NetworkQuality.POOR -> 0
+            NetworkQuality.MODERATE -> 1
+            NetworkQuality.GOOD -> 2
+        }
+        
+        AlertDialog.Builder(this)
+            .setTitle("Video Quality")
+            .setSingleChoiceItems(qualities, selectedIndex) { _, which ->
+                selectedIndex = which
+            }
+            .setPositiveButton("Apply") { _, _ ->
+                when (selectedIndex) {
+                    0 -> {
+                        isAutoQuality = false
+                        applyQualityLevel(NetworkQuality.POOR, "Low (240p)")
+                    }
+                    1 -> {
+                        isAutoQuality = false
+                        applyQualityLevel(NetworkQuality.MODERATE, "Medium (360p)")
+                    }
+                    2 -> {
+                        isAutoQuality = false
+                        applyQualityLevel(NetworkQuality.GOOD, "High (480p)")
+                    }
+                    3 -> {
+                        isAutoQuality = true
+                        Toast.makeText(this, "Auto quality enabled - adapts to network", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+    
+    private fun applyQualityLevel(quality: NetworkQuality, name: String) {
+        networkQuality = quality
+        val (width, height, fps, bitrate) = when (quality) {
+            NetworkQuality.POOR -> listOf(320, 240, 10, 200_000)
+            NetworkQuality.MODERATE -> listOf(480, 360, 15, 500_000)
+            NetworkQuality.GOOD -> listOf(640, 480, 24, 1_000_000)
+        }
+        
+        // Update current resolution tracking
+        currentVideoResolution = "${height}p"
+        
+        // Apply video encoding parameters
+        try {
+            videoCapturer?.changeCaptureFormat(width, height, fps)
+            Log.d(TAG, "Applied quality: $name (${width}x${height}@${fps}fps)")
+            Toast.makeText(this, "Quality: $name", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to apply quality: ${e.message}")
         }
     }
     
@@ -998,9 +1141,72 @@ class CallActivity : AppCompatActivity() {
     }
 
     private fun endCall() {
-        SignalingManager.sendHangup(peerId)
+        // Save call stats before ending
+        saveCallStatsToServer()
+        
+        SignalingManager.sendHangup(peerId, currentCallId)
         updateCallState(CallState.ENDED)
         finish()
+    }
+    
+    private fun saveCallStatsToServer() {
+        if (statsSamples.isEmpty() || currentCallId == null) {
+            Log.d(TAG, "No stats to save or call not connected")
+            return
+        }
+        
+        val duration = if (callStartTime > 0) (System.currentTimeMillis() - callStartTime) / 1000 else 0
+        
+        // Calculate summary stats
+        val avgSendBitrate = statsSamples.map { it.sendBitrateKbps }.average()
+        val avgReceiveBitrate = statsSamples.map { it.receiveBitrateKbps }.average()
+        val avgPacketLoss = statsSamples.map { it.packetLossPercent }.average()
+        val avgRtt = statsSamples.map { it.rttMs }.average()
+        val totalDataUsed = statsSamples.lastOrNull()?.dataUsedBytes ?: 0L
+        
+        // Calculate quality distribution
+        val goodCount = statsSamples.count { it.networkQuality == "GOOD" }
+        val moderateCount = statsSamples.count { it.networkQuality == "MODERATE" }
+        val poorCount = statsSamples.count { it.networkQuality == "POOR" }
+        
+        // Build JSON for stats samples
+        val samplesJson = org.json.JSONArray()
+        statsSamples.forEach { sample ->
+            samplesJson.put(org.json.JSONObject().apply {
+                put("timestamp", sample.timestamp)
+                put("sendBitrateKbps", sample.sendBitrateKbps)
+                put("receiveBitrateKbps", sample.receiveBitrateKbps)
+                put("packetLossPercent", sample.packetLossPercent)
+                put("rttMs", sample.rttMs)
+                put("networkQuality", sample.networkQuality)
+                put("dataUsedBytes", sample.dataUsedBytes)
+            })
+        }
+        
+        val statsPayload = org.json.JSONObject().apply {
+            put("callId", currentCallId)
+            put("caller", myId)
+            put("callee", peerId)
+            put("isVideo", isVideoCall)
+            put("duration", duration)
+            put("totalSamples", statsSamples.size)
+            put("avgSendBitrateKbps", avgSendBitrate)
+            put("avgReceiveBitrateKbps", avgReceiveBitrate)
+            put("avgPacketLossPercent", avgPacketLoss)
+            put("avgRttMs", avgRtt)
+            put("totalDataUsedBytes", totalDataUsed)
+            put("qualityDistribution", org.json.JSONObject().apply {
+                put("good", goodCount)
+                put("moderate", moderateCount)
+                put("poor", poorCount)
+            })
+            put("samples", samplesJson)
+        }
+        
+        Log.d(TAG, "Saving call stats: ${statsSamples.size} samples, duration: ${duration}s")
+        
+        // Send via WebSocket
+        SignalingManager.sendCallStats(statsPayload)
     }
 
     // ===================== CALL STATE =====================
@@ -1008,6 +1214,18 @@ class CallActivity : AppCompatActivity() {
     private fun updateCallState(newState: CallState) {
         callState = newState
         Log.d(TAG, "Call state updated to: $newState")
+        
+        // Track call start time when connected
+        if (newState == CallState.CONNECTED && callStartTime == 0L) {
+            callStartTime = System.currentTimeMillis()
+            // Use server's callId if available, otherwise generate our own
+            if (currentCallId == null) {
+                currentCallId = SignalingManager.getCurrentCallId() ?: "${myId}_${peerId}_${callStartTime}"
+            }
+            statsSamples.clear()  // Clear any previous samples
+            Log.d(TAG, "Call started, callId: $currentCallId")
+        }
+        
         runOnUiThread {
             callStateText.text = when (callState) {
                 CallState.IDLE -> "Connecting..."
@@ -1120,12 +1338,15 @@ class CallActivity : AppCompatActivity() {
             lastTimestamp = currentTimestamp
             lastPacketsSent = totalPacketsSent
             lastPacketsLost = totalPacketsLost
+            
+            // Update cumulative data usage
+            totalDataUsedBytes = totalBytesSent + totalBytesReceived
 
             // Convert RTT to milliseconds
             val rttMs = (rtt * 1000).toInt()
 
             updateNetworkQuality(sendBitrateKbps, packetLossPercent, rtt)
-            updateStatsUI(sendBitrateKbps, receiveBitrateKbps, packetLossPercent, rttMs)
+            updateStatsUI(sendBitrateKbps, receiveBitrateKbps, packetLossPercent, rttMs, totalDataUsedBytes)
         }
     }
 
@@ -1163,18 +1384,43 @@ class CallActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun updateStatsUI(sendBitrate: Long, receiveBitrate: Long, packetLoss: Double, rttMs: Int) {
+    private fun updateStatsUI(sendBitrate: Long, receiveBitrate: Long, packetLoss: Double, rttMs: Int, dataUsedBytes: Long) {
+        // Collect stats sample for database storage
+        if (callStartTime > 0) {
+            val sample = StatsSample(
+                timestamp = System.currentTimeMillis(),
+                sendBitrateKbps = sendBitrate,
+                receiveBitrateKbps = receiveBitrate,
+                packetLossPercent = packetLoss,
+                rttMs = rttMs,
+                networkQuality = networkQuality.name,
+                dataUsedBytes = dataUsedBytes
+            )
+            statsSamples.add(sample)
+            Log.d(TAG, "Stats sample collected: bitrate=${sendBitrate}/${receiveBitrate}, loss=${"%.2f".format(packetLoss)}%, rtt=${rttMs}ms")
+        }
+        
         runOnUiThread {
             networkStatsText.text = buildString {
                 append("↑ ${sendBitrate} kbps | ↓ ${receiveBitrate} kbps\n")
                 append("Loss: ${"%.2f".format(packetLoss)}% | RTT: ${rttMs} ms")
             }
             
-            networkQualityText.text = when (networkQuality) {
-                NetworkQuality.GOOD -> "Quality: ✅ Good"
-                NetworkQuality.MODERATE -> "Quality: ⚠️ Moderate"
-                NetworkQuality.POOR -> "Quality: ❌ Poor"
+            // Show quality with auto indicator and current resolution
+            val qualityIcon = when (networkQuality) {
+                NetworkQuality.GOOD -> "✅"
+                NetworkQuality.MODERATE -> "⚠️"
+                NetworkQuality.POOR -> "❌"
             }
+            val autoIndicator = if (isAutoQuality) " (Auto)" else ""
+            networkQualityText.text = "$qualityIcon ${networkQuality.name}$autoIndicator | 📹 $currentVideoResolution"
+            
+            // Update network type
+            networkTypeText.text = "Network: ${getNetworkType()}"
+            
+            // Update data usage (convert to MB)
+            val dataUsedMB = dataUsedBytes / (1024.0 * 1024.0)
+            dataUsageText.text = "Data: ${"%.2f".format(dataUsedMB)} MB"
         }
     }
 
@@ -1182,11 +1428,19 @@ class CallActivity : AppCompatActivity() {
 
     private fun adjustVideoQuality(quality: NetworkQuality) {
         Log.d(TAG, "Adjusting video quality to: $quality")
+        
+        // Update resolution tracking based on quality level
+        currentVideoResolution = when (quality) {
+            NetworkQuality.GOOD -> "720p"
+            NetworkQuality.MODERATE -> "480p"
+            NetworkQuality.POOR -> "360p"
+        }
+        
         peerConnection?.senders?.forEach { sender ->
             if (sender.track()?.kind() == "video") {
                 val parameters = sender.parameters
                 if (parameters.encodings.isNotEmpty()) {
-                    // Bitrates for 720p video (higher for better quality)
+                    // Bitrates for video (higher for better quality)
                     parameters.encodings[0].maxBitrateBps = when (quality) {
                         NetworkQuality.GOOD -> 2_500_000     // 2.5 Mbps for good networks
                         NetworkQuality.MODERATE -> 1_200_000 // 1.2 Mbps for moderate
