@@ -295,6 +295,12 @@ app.get("/calls/stats/:callId", authMiddleware, async (req, res) => {
       return res.status(404).json({ error: "Stats not found for this call" });
     }
     
+    // Log for debugging
+    console.log(`📊 Fetching stats for callId: ${callId}`);
+    console.log(`   - totalSamples: ${stats.totalSamples}`);
+    console.log(`   - samples array exists: ${!!stats.samples}`);
+    console.log(`   - samples length: ${stats.samples?.length || 0}`);
+    
     res.json({ stats });
   } catch (error) {
     console.error("Error fetching call stats:", error);
@@ -481,6 +487,15 @@ async function saveCallHistory(callId, caller, callee, isVideo, duration, status
 // Save detailed call statistics
 async function saveCallStats(data) {
   try {
+    // Log incoming samples for debugging
+    console.log(`📊 saveCallStats received:`);
+    console.log(`   - samples type: ${typeof data.samples}`);
+    console.log(`   - samples isArray: ${Array.isArray(data.samples)}`);
+    console.log(`   - samples length: ${data.samples?.length || 0}`);
+    if (data.samples && data.samples.length > 0) {
+      console.log(`   - first sample: ${JSON.stringify(data.samples[0])}`);
+    }
+    
     const statsDoc = {
       callId: data.callId,
       caller: data.caller,

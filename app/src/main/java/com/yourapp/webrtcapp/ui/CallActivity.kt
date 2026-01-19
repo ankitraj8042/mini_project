@@ -66,6 +66,8 @@ class CallActivity : AppCompatActivity() {
     private lateinit var statsHeader: LinearLayout
     private lateinit var statsDetails: LinearLayout
     private lateinit var statsExpandArrow: android.widget.ImageView
+    private lateinit var callDurationText: TextView
+    private lateinit var callQualityText: TextView
     private lateinit var muteBtn: ImageButton
     private lateinit var endCallBtn: ImageButton
     private lateinit var videoToggleBtn: ImageButton
@@ -105,18 +107,21 @@ class CallActivity : AppCompatActivity() {
     
     // Stats monitoring
     private val statsHandler = Handler(Looper.getMainLooper())
+    private val timerHandler = Handler(Looper.getMainLooper())
     private var lastBytesSent = 0L
     private var lastBytesReceived = 0L
     private var lastTimestamp = 0L
     private var lastPacketsSent = 0L
     private var lastPacketsLost = 0L
     private var totalDataUsedBytes = 0L  // Track cumulative data usage
+    private var lastStatsSaveTime = 0L  // Track when we last saved stats
     
     // Poor quality dialog tracking
     private var poorQualityStartTime = 0L  // When poor quality started
     private var dontShowPoorQualityDialog = false  // User chose "Don't show again"
     private var isPoorQualityDialogShowing = false  // Prevent multiple dialogs
     private val POOR_QUALITY_THRESHOLD_MS = 20_000L  // 20 seconds threshold
+    private val STATS_SAVE_INTERVAL_MS = 3_000L  // Save stats every 3 seconds
     
     // Real-time stats collection for saving to database
     private val statsSamples = mutableListOf<StatsSample>()
@@ -217,6 +222,8 @@ class CallActivity : AppCompatActivity() {
         statsHeader = findViewById(R.id.statsHeader)
         statsDetails = findViewById(R.id.statsDetails)
         statsExpandArrow = findViewById(R.id.statsExpandArrow)
+        callDurationText = findViewById(R.id.callDurationText)
+        callQualityText = findViewById(R.id.callQualityText)
         muteBtn = findViewById(R.id.muteBtn)
         endCallBtn = findViewById(R.id.endCallBtn)
         videoToggleBtn = findViewById(R.id.videoToggleBtn)
@@ -229,6 +236,8 @@ class CallActivity : AppCompatActivity() {
         callStateText.text = if (isCaller) "Calling $peerId..." else "Incoming call..."
         networkStatsText.text = ""
         networkQualityText.text = ""
+        callDurationText.text = " • 00:00"
+        callQualityText.text = "📶 Connecting..."
         
         // If audio-only call, show indicator and hide video views
         if (!isVideoCall) {
@@ -1224,12 +1233,21 @@ class CallActivity : AppCompatActivity() {
         // Track call start time when connected
         if (newState == CallState.CONNECTED && callStartTime == 0L) {
             callStartTime = System.currentTimeMillis()
+            lastStatsSaveTime = callStartTime
             // Use server's callId if available, otherwise generate our own
             if (currentCallId == null) {
                 currentCallId = SignalingManager.getCurrentCallId() ?: "${myId}_${peerId}_${callStartTime}"
             }
             statsSamples.clear()  // Clear any previous samples
             Log.d(TAG, "Call started, callId: $currentCallId")
+            
+            // Start the call duration timer
+            startCallTimer()
+        }
+        
+        // Stop timer when call ends
+        if (newState == CallState.ENDED) {
+            stopCallTimer()
         }
         
         runOnUiThread {
@@ -1240,7 +1258,47 @@ class CallActivity : AppCompatActivity() {
                 CallState.CONNECTED -> "Connected to $peerId"
                 CallState.ENDED -> "Call Ended"
             }
+            
+            // Update quality indicator
+            if (callState == CallState.CONNECTED) {
+                updateCallQualityText()
+            }
         }
+    }
+    
+    private fun startCallTimer() {
+        timerHandler.post(object : Runnable {
+            override fun run() {
+                if (callState == CallState.CONNECTED && callStartTime > 0) {
+                    val elapsed = (System.currentTimeMillis() - callStartTime) / 1000
+                    val minutes = elapsed / 60
+                    val seconds = elapsed % 60
+                    runOnUiThread {
+                        callDurationText.text = " • %02d:%02d".format(minutes, seconds)
+                    }
+                    timerHandler.postDelayed(this, 1000)
+                }
+            }
+        })
+    }
+    
+    private fun stopCallTimer() {
+        timerHandler.removeCallbacksAndMessages(null)
+    }
+    
+    private fun updateCallQualityText() {
+        val qualityText = when (networkQuality) {
+            NetworkQuality.GOOD -> "📶 Excellent"
+            NetworkQuality.MODERATE -> "📶 Good"
+            NetworkQuality.POOR -> "📶 Poor"
+        }
+        val qualityColor = when (networkQuality) {
+            NetworkQuality.GOOD -> android.graphics.Color.parseColor("#4CAF50")
+            NetworkQuality.MODERATE -> android.graphics.Color.parseColor("#FFC107")
+            NetworkQuality.POOR -> android.graphics.Color.parseColor("#F44336")
+        }
+        callQualityText.text = qualityText
+        callQualityText.setTextColor(qualityColor)
     }
 
     // ===================== NETWORK STATS =====================
@@ -1436,10 +1494,12 @@ class CallActivity : AppCompatActivity() {
     }
 
     private fun updateStatsUI(sendBitrate: Long, receiveBitrate: Long, packetLoss: Double, rttMs: Int, dataUsedBytes: Long) {
-        // Collect stats sample for database storage
-        if (callStartTime > 0) {
+        // Collect stats sample every 3 seconds for database storage
+        val currentTime = System.currentTimeMillis()
+        if (callStartTime > 0 && (currentTime - lastStatsSaveTime) >= STATS_SAVE_INTERVAL_MS) {
+            lastStatsSaveTime = currentTime
             val sample = StatsSample(
-                timestamp = System.currentTimeMillis(),
+                timestamp = currentTime,
                 sendBitrateKbps = sendBitrate,
                 receiveBitrateKbps = receiveBitrate,
                 packetLossPercent = packetLoss,
@@ -1448,7 +1508,12 @@ class CallActivity : AppCompatActivity() {
                 dataUsedBytes = dataUsedBytes
             )
             statsSamples.add(sample)
-            Log.d(TAG, "Stats sample collected: bitrate=${sendBitrate}/${receiveBitrate}, loss=${"%.2f".format(packetLoss)}%, rtt=${rttMs}ms")
+            Log.d(TAG, "Stats sample collected (every 3s): bitrate=${sendBitrate}/${receiveBitrate}, loss=${"%.2f".format(packetLoss)}%, rtt=${rttMs}ms, samples count=${statsSamples.size}")
+        }
+        
+        // Update quality indicator text
+        runOnUiThread {
+            updateCallQualityText()
         }
         
         runOnUiThread {
@@ -1510,6 +1575,7 @@ class CallActivity : AppCompatActivity() {
         Log.d(TAG, "CallActivity destroyed, cleaning up")
 
         statsHandler.removeCallbacksAndMessages(null)
+        timerHandler.removeCallbacksAndMessages(null)
 
         try {
             videoCapturer?.stopCapture()

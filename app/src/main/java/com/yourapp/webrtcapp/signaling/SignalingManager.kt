@@ -307,20 +307,26 @@ object SignalingManager {
     
     fun sendCallStats(statsPayload: org.json.JSONObject) {
         try {
-            // Convert JSONObject to Map for Gson serialization
-            val statsMap = mutableMapOf<String, Any>()
-            statsMap["type"] = "callStats"
-            statsMap["from"] = currentUserId ?: ""
-            
-            // Add all fields from the JSON payload
-            val keys = statsPayload.keys()
-            while (keys.hasNext()) {
-                val key = keys.next()
-                statsMap[key] = statsPayload.get(key)
+            // Send the JSONObject directly as string to preserve array structure
+            val message = org.json.JSONObject().apply {
+                put("type", "callStats")
+                put("from", currentUserId ?: "")
+                // Copy all fields from statsPayload
+                val keys = statsPayload.keys()
+                while (keys.hasNext()) {
+                    val key = keys.next()
+                    put(key, statsPayload.get(key))
+                }
             }
             
-            send(statsMap)
-            Log.d(TAG, "Call stats sent to server")
+            val json = message.toString()
+            Log.d(TAG, "Sending call stats, samples count: ${statsPayload.optJSONArray("samples")?.length() ?: 0}")
+            val sent = webSocket?.send(json) ?: false
+            if (!sent) {
+                Log.e(TAG, "Failed to send call stats - WebSocket is null or closed")
+            } else {
+                Log.d(TAG, "Call stats sent to server successfully")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error sending call stats: ${e.message}")
         }

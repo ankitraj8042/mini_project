@@ -2,11 +2,17 @@ package com.yourapp.webrtcapp.api
 
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
+import com.google.gson.JsonDeserializationContext
+import com.google.gson.JsonDeserializer
+import com.google.gson.JsonElement
 import com.google.gson.annotations.SerializedName
+import com.google.gson.reflect.TypeToken
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.lang.reflect.Type
 
 /**
  * API Client for backend communication
@@ -24,7 +30,10 @@ class ApiClient(private val baseUrl: String) {
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .build()
     
-    private val gson = Gson()
+    // Custom Gson with deserializer that handles samples as both array and object
+    private val gson = GsonBuilder()
+        .registerTypeAdapter(CallStatsItem::class.java, CallStatsItemDeserializer())
+        .create()
     private var authToken: String? = null
     
     fun setAuthToken(token: String?) {
@@ -241,6 +250,15 @@ class ApiClient(private val baseUrl: String) {
                 try {
                     val body = response.body?.string()
                     
+                    // Log response for debugging
+                    Log.d(TAG, "Response URL: ${call.request().url}")
+                    Log.d(TAG, "Response code: ${response.code}")
+                    if (body != null && body.length < 2000) {
+                        Log.d(TAG, "Response body: $body")
+                    } else {
+                        Log.d(TAG, "Response body length: ${body?.length ?: 0}")
+                    }
+                    
                     if (!response.isSuccessful) {
                         val error = try {
                             gson.fromJson(body, ErrorResponse::class.java).error
@@ -379,3 +397,77 @@ data class SuccessResponse(
 data class ErrorResponse(
     val error: String
 )
+
+/**
+ * Custom deserializer to handle 'samples' field that might be an array or object
+ * This handles legacy data that may have stored samples differently
+ */
+class CallStatsItemDeserializer : JsonDeserializer<CallStatsItem> {
+    override fun deserialize(
+        json: JsonElement,
+        typeOfT: Type,
+        context: JsonDeserializationContext
+    ): CallStatsItem {
+        val jsonObject = json.asJsonObject
+        
+        Log.d("CallStatsDeserializer", "Parsing CallStatsItem JSON: ${jsonObject.keySet()}")
+        
+        // Parse samples manually - handle both array and object cases
+        val samplesElement = jsonObject.get("samples")
+        Log.d("CallStatsDeserializer", "samples element: ${samplesElement?.javaClass?.simpleName}, isNull=${samplesElement?.isJsonNull}, isArray=${samplesElement?.isJsonArray}, isObject=${samplesElement?.isJsonObject}")
+        
+        val samples: List<StatsSample>? = when {
+            samplesElement == null || samplesElement.isJsonNull -> {
+                Log.d("CallStatsDeserializer", "samples is null")
+                null
+            }
+            samplesElement.isJsonArray -> {
+                val arr = samplesElement.asJsonArray
+                Log.d("CallStatsDeserializer", "samples is array with ${arr.size()} elements")
+                if (arr.size() > 0) {
+                    Log.d("CallStatsDeserializer", "First sample: ${arr[0]}")
+                }
+                val type = object : TypeToken<List<StatsSample>>() {}.type
+                context.deserialize(samplesElement, type)
+            }
+            samplesElement.isJsonObject -> {
+                Log.d("CallStatsDeserializer", "samples is object (not array): $samplesElement")
+                // Some records might have samples as an empty object {} instead of array
+                // Return empty list in this case
+                emptyList()
+            }
+            else -> {
+                Log.d("CallStatsDeserializer", "samples is unknown type")
+                null
+            }
+        }
+        
+        Log.d("CallStatsDeserializer", "Parsed samples count: ${samples?.size ?: 0}")
+        
+        // Parse qualityDistribution
+        val qualityDistElement = jsonObject.get("qualityDistribution")
+        val qualityDistribution: QualityDistribution? = when {
+            qualityDistElement == null || qualityDistElement.isJsonNull -> null
+            qualityDistElement.isJsonObject -> context.deserialize(qualityDistElement, QualityDistribution::class.java)
+            else -> null
+        }
+        
+        return CallStatsItem(
+            id = jsonObject.get("_id")?.asString,
+            callId = jsonObject.get("callId")?.asString ?: "",
+            caller = jsonObject.get("caller")?.asString ?: "",
+            callee = jsonObject.get("callee")?.asString ?: "",
+            isVideo = jsonObject.get("isVideo")?.asBoolean ?: true,
+            duration = jsonObject.get("duration")?.asInt ?: 0,
+            totalSamples = jsonObject.get("totalSamples")?.asInt ?: 0,
+            avgSendBitrateKbps = jsonObject.get("avgSendBitrateKbps")?.asDouble ?: 0.0,
+            avgReceiveBitrateKbps = jsonObject.get("avgReceiveBitrateKbps")?.asDouble ?: 0.0,
+            avgPacketLossPercent = jsonObject.get("avgPacketLossPercent")?.asDouble ?: 0.0,
+            avgRttMs = jsonObject.get("avgRttMs")?.asDouble ?: 0.0,
+            totalDataUsedBytes = jsonObject.get("totalDataUsedBytes")?.asLong ?: 0L,
+            qualityDistribution = qualityDistribution,
+            samples = samples,
+            timestamp = jsonObject.get("timestamp")?.asString ?: ""
+        )
+    }
+}

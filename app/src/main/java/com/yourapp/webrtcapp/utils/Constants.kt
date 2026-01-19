@@ -157,7 +157,14 @@ object Constants {
     fun getSignalingUrl(context: Context): String {
         val customIp = getCustomServerIp(context)
         return if (customIp != null && customIp.isNotBlank()) {
-            "$WS_PROTOCOL://$customIp:$DEFAULT_SERVER_PORT"
+            // Check if custom IP is a full URL (e.g., ngrok)
+            if (customIp.startsWith("wss://") || customIp.startsWith("ws://")) {
+                customIp
+            } else if (customIp.contains(".ngrok")) {
+                "wss://$customIp"
+            } else {
+                "$WS_PROTOCOL://$customIp:$DEFAULT_SERVER_PORT"
+            }
         } else {
             DEVICE_SERVER_URL
         }
@@ -165,12 +172,24 @@ object Constants {
     
     /**
      * Get HTTP URL for REST API
+     * Derives from the same server as WebSocket to ensure consistency
      */
     fun getHttpServerUrl(context: Context): String {
         val customIp = getCustomServerIp(context)
-        val protocol = if (USE_SECURE_WEBSOCKET) "https" else "http"
-        val ip = if (customIp != null && customIp.isNotBlank()) customIp else DEFAULT_SERVER_IP
-        return "$protocol://$ip:$DEFAULT_SERVER_PORT"
+        return if (customIp != null && customIp.isNotBlank()) {
+            // Check if custom IP is a full URL (e.g., ngrok domain)
+            if (customIp.startsWith("https://") || customIp.startsWith("http://")) {
+                customIp  // Already a full URL
+            } else if (customIp.contains(".ngrok")) {
+                "https://$customIp"  // ngrok uses HTTPS
+            } else {
+                val protocol = if (USE_SECURE_WEBSOCKET) "https" else "http"
+                "$protocol://$customIp:$DEFAULT_SERVER_PORT"
+            }
+        } else {
+            val protocol = if (USE_SECURE_WEBSOCKET) "https" else "http"
+            "$protocol://$DEFAULT_SERVER_IP:$DEFAULT_SERVER_PORT"
+        }
     }
     
     private fun getPrefs(context: Context): SharedPreferences {

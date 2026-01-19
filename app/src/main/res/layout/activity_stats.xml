@@ -196,8 +196,9 @@
 
             </androidx.cardview.widget.CardView>
 
-            <!-- Quality Score Graph -->
+            <!-- Network Quality Graph -->
             <androidx.cardview.widget.CardView
+                android:id="@+id/qualityCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="16dp"
@@ -214,7 +215,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🎯 AI Quality Score Over Time"
+                        android:text="📶 Network Quality Over Time"
                         android:textSize="14sp"
                         android:textStyle="bold"
                         android:textColor="#FF9800"
@@ -226,40 +227,13 @@
                         android:layout_height="180dp"
                         android:background="#FAFAFA" />
 
-                </LinearLayout>
-
-            </androidx.cardview.widget.CardView>
-
-            <!-- Legend/Explanation -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="4dp"
-                xmlns:app="http://schemas.android.com/apk/res-auto">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="🤖 How AI Adaptation Works"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/primary"
-                        android:layout_marginBottom="8dp" />
-
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="1. Monitor: AI continuously tracks bitrate, packet loss, and latency\n\n2. Analyze: Detects network degradation patterns in real-time\n\n3. Predict: Uses ML model to predict optimal quality level\n\n4. Adapt: Automatically adjusts video resolution and bitrate\n\n5. Recover: Upgrades quality when network improves"
-                        android:textSize="13sp"
-                        android:lineSpacingMultiplier="1.2"
-                        android:textColor="#555555" />
+                        android:text="Quality: 100 = Excellent, 60 = Good, 30 = Poor"
+                        android:textSize="11sp"
+                        android:textColor="#888888"
+                        android:layout_marginTop="4dp" />
 
                 </LinearLayout>
 

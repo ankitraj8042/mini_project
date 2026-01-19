@@ -9,14 +9,15 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.cardview.widget.CardView
 import com.yourapp.webrtcapp.R
 import com.yourapp.webrtcapp.api.ApiClient
 import com.yourapp.webrtcapp.api.CallStatsItem
 import com.yourapp.webrtcapp.auth.AuthManager
 
 /**
- * Statistics Activity - Shows REAL call quality metrics and graphs
- * Loads data from MongoDB via API for actual call statistics
+ * Statistics Activity - Shows call quality graphs
+ * Loads real recorded data from MongoDB
  */
 class StatsActivity : AppCompatActivity() {
 
@@ -30,6 +31,7 @@ class StatsActivity : AppCompatActivity() {
     private lateinit var packetLossGraph: GraphView
     private lateinit var rttGraph: GraphView
     private lateinit var qualityGraph: GraphView
+    private lateinit var qualityCard: CardView
     private lateinit var statsContainer: LinearLayout
     private lateinit var progressBar: ProgressBar
     private lateinit var apiClient: ApiClient
@@ -54,6 +56,7 @@ class StatsActivity : AppCompatActivity() {
         packetLossGraph = findViewById(R.id.packetLossGraph)
         rttGraph = findViewById(R.id.rttGraph)
         qualityGraph = findViewById(R.id.qualityGraph)
+        qualityCard = findViewById(R.id.qualityCard)
         statsContainer = findViewById(R.id.statsContainer)
         progressBar = findViewById(R.id.progressBar)
 
@@ -65,33 +68,36 @@ class StatsActivity : AppCompatActivity() {
         val caller = intent.getStringExtra("caller") ?: ""
         val callee = intent.getStringExtra("callee") ?: ""
         
-        if (callId != null) {
-            // Load stats for a specific call from API
+        Log.d(TAG, "Loading stats for callId: $callId, caller: $caller, callee: $callee")
+        
+        if (callId != null && callId.isNotEmpty()) {
             loadCallStatsFromApi(callId, caller, callee)
         } else {
-            // No specific call - show no data message
-            displayNoStats()
+            displayNoStats("No call ID provided")
         }
     }
 
     private fun loadCallStatsFromApi(callId: String, caller: String, callee: String) {
         showLoading(true)
-        titleText.text = "📊 Loading Call Statistics..."
+        titleText.text = "📊 Loading..."
         
-        Log.d(TAG, "Loading stats for callId: $callId")
+        Log.d(TAG, "Fetching stats from API for callId: $callId")
         
         apiClient.getCallStats(callId, { stats ->
             runOnUiThread {
                 showLoading(false)
+                Log.d(TAG, "Stats received: totalSamples=${stats.totalSamples}, samples=${stats.samples?.size ?: "null"}")
+                Log.d(TAG, "Stats details: callId=${stats.callId}, duration=${stats.duration}, avgBitrate=${stats.avgSendBitrateKbps}")
+                if (stats.samples != null && stats.samples.isNotEmpty()) {
+                    Log.d(TAG, "First sample: ${stats.samples[0]}")
+                }
                 displayRealStats(stats, caller, callee)
             }
         }, { error ->
             runOnUiThread {
                 showLoading(false)
                 Log.e(TAG, "Error loading stats: $error")
-                Toast.makeText(this, "Could not load stats: $error", Toast.LENGTH_SHORT).show()
-                // Show no data message
-                displayNoStats()
+                displayNoStats(error)
             }
         })
     }
@@ -106,9 +112,38 @@ class StatsActivity : AppCompatActivity() {
         
         titleText.text = "📊 Call with $otherParty"
         
-        // Extract sample data for graphs
-        val samples = stats.samples ?: emptyList()
+        // Extract sample data for graphs from the recorded samples
+        val samples = stats.samples
         
+        if (samples.isNullOrEmpty()) {
+            Log.w(TAG, "No sample data in stats, using averages only")
+            // No detailed samples - show message
+            summaryText.text = "Duration: ${formatDuration(stats.duration)} | ${if (stats.isVideo) "Video" else "Audio"} Call"
+            summaryText.visibility = View.VISIBLE
+            
+            // Show simple 2-point graphs with averages
+            bitrateGraph.setData(
+                listOf(stats.avgSendBitrateKbps.toFloat(), stats.avgReceiveBitrateKbps.toFloat()),
+                "Avg Bitrate (kbps)",
+                Color.parseColor("#4CAF50")
+            )
+            packetLossGraph.setData(
+                listOf(stats.avgPacketLossPercent.toFloat()),
+                "Avg Packet Loss (%)",
+                Color.parseColor("#F44336")
+            )
+            rttGraph.setData(
+                listOf(stats.avgRttMs.toFloat()),
+                "Avg Latency (ms)",
+                Color.parseColor("#2196F3")
+            )
+            qualityCard.visibility = View.GONE
+            return
+        }
+        
+        Log.d(TAG, "Displaying ${samples.size} recorded samples")
+        
+        // Build graph data from actual recorded samples
         val bitrateData = samples.map { (it.sendBitrateKbps + it.receiveBitrateKbps).toFloat() }
         val packetLossData = samples.map { it.packetLossPercent.toFloat() }
         val rttData = samples.map { it.rttMs.toFloat() }
@@ -120,78 +155,36 @@ class StatsActivity : AppCompatActivity() {
                 else -> 50f
             }
         }
-
-        // Calculate quality distribution percentages
-        val totalSamples = stats.totalSamples.coerceAtLeast(1)
-        val goodPercent = ((stats.qualityDistribution?.good ?: 0) * 100.0 / totalSamples)
-        val moderatePercent = ((stats.qualityDistribution?.moderate ?: 0) * 100.0 / totalSamples)
-        val poorPercent = ((stats.qualityDistribution?.poor ?: 0) * 100.0 / totalSamples)
         
-        // Data usage in MB
-        val dataUsedMB = stats.totalDataUsedBytes / (1024.0 * 1024.0)
+        // Brief summary line only
+        summaryText.text = "Duration: ${formatDuration(stats.duration)} | ${samples.size} data points | ${if (stats.isVideo) "Video" else "Audio"}"
+        summaryText.visibility = View.VISIBLE
 
-        summaryText.text = """
-            📈 REAL Call Statistics (from MongoDB):
-            
-            📞 Call Details:
-            ▸ Duration: ${formatDuration(stats.duration)}
-            ▸ Type: ${if (stats.isVideo) "Video" else "Audio"} Call
-            ▸ Data Used: ${"%.2f".format(dataUsedMB)} MB
-            ▸ Total Samples: ${stats.totalSamples}
-            
-            📊 Average Metrics:
-            ▸ Send Bitrate: ${stats.avgSendBitrateKbps.toInt()} kbps
-            ▸ Receive Bitrate: ${stats.avgReceiveBitrateKbps.toInt()} kbps
-            ▸ Packet Loss: ${"%.2f".format(stats.avgPacketLossPercent)}%
-            ▸ RTT (Latency): ${stats.avgRttMs.toInt()} ms
-            
-            🎯 Quality Distribution:
-            ▸ ✅ Good: ${"%.1f".format(goodPercent)}%
-            ▸ ⚠️ Moderate: ${"%.1f".format(moderatePercent)}%
-            ▸ ❌ Poor: ${"%.1f".format(poorPercent)}%
-        """.trimIndent()
-
-        // Display graphs with real data
-        if (bitrateData.isNotEmpty()) {
-            bitrateGraph.setData(bitrateData, "Total Bitrate (kbps)", Color.parseColor("#4CAF50"))
-            packetLossGraph.setData(packetLossData, "Packet Loss (%)", Color.parseColor("#F44336"))
-            rttGraph.setData(rttData, "RTT (ms)", Color.parseColor("#2196F3"))
-            qualityGraph.setData(qualityData, "Quality Score", Color.parseColor("#FF9800"))
-        } else {
-            // No sample data, show summary only
-            bitrateGraph.setData(listOf(stats.avgSendBitrateKbps.toFloat(), stats.avgReceiveBitrateKbps.toFloat()), 
-                "Bitrate (kbps)", Color.parseColor("#4CAF50"))
-        }
+        // Display graphs with real recorded data
+        bitrateGraph.visibility = View.VISIBLE
+        packetLossGraph.visibility = View.VISIBLE
+        rttGraph.visibility = View.VISIBLE
+        qualityCard.visibility = View.VISIBLE
         
-        Log.d(TAG, "Displayed real stats: ${stats.totalSamples} samples, ${stats.duration}s duration")
+        bitrateGraph.setData(bitrateData, "Bitrate (kbps)", Color.parseColor("#4CAF50"))
+        packetLossGraph.setData(packetLossData, "Packet Loss (%)", Color.parseColor("#F44336"))
+        rttGraph.setData(rttData, "Latency (ms)", Color.parseColor("#2196F3"))
+        qualityGraph.setData(qualityData, "Network Quality", Color.parseColor("#FF9800"))
+        
+        Log.d(TAG, "Graphs displayed with ${samples.size} samples")
     }
 
-    private fun displayNoStats() {
-        titleText.text = "📊 No Statistics Available"
+    private fun displayNoStats(reason: String) {
+        titleText.text = "📊 No Statistics"
         
-        summaryText.text = """
-            ⚠️ No call statistics found for this call.
-            
-            This could happen because:
-            
-            1. The call was not connected (missed/rejected)
-            2. The call was too short to collect stats
-            3. Stats could not be saved to the server
-            
-            📞 To see real statistics:
-            ▸ Make a video call that lasts at least 10 seconds
-            ▸ Make sure both parties are connected
-            ▸ End the call properly using the End button
-            
-            Statistics are collected every second during 
-            connected calls and saved when the call ends.
-        """.trimIndent()
+        summaryText.text = "Could not load call statistics.\n\nReason: $reason\n\nStats are recorded during video calls and saved when the call ends properly."
+        summaryText.visibility = View.VISIBLE
 
-        // Hide graphs when no data
+        // Hide all graphs
         bitrateGraph.visibility = View.GONE
         packetLossGraph.visibility = View.GONE
         rttGraph.visibility = View.GONE
-        qualityGraph.visibility = View.GONE
+        qualityCard.visibility = View.GONE
     }
 
     private fun formatDuration(seconds: Int): String {

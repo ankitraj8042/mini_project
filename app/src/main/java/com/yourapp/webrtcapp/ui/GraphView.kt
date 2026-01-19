@@ -123,10 +123,11 @@ class GraphView @JvmOverloads constructor(
             canvas.drawPath(path, linePaint)
         }
         
-        // Draw current/last value
+        // Draw current/last value and data points info
         val lastValue = data.lastOrNull() ?: 0f
-        val avgValue = data.average()
-        val statsText = "Current: ${lastValue.toInt()} | Avg: ${"%.1f".format(avgValue)}"
+        val minValue = data.minOrNull() ?: 0f
+        val maxValue = data.maxOrNull() ?: 0f
+        val statsText = "Min: ${minValue.toInt()} | Max: ${maxValue.toInt()} | Points: ${data.size}"
         canvas.drawText(statsText, padding, height - 10f, axisPaint)
     }
 
