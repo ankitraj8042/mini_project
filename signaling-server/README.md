@@ -1,160 +1,106 @@
-# Signaling Server
+# Echoo - Signaling Server
 
-WebSocket signaling server for WebRTC call establishment.
+Backend signaling server for the **Echoo** WebRTC video calling Android application. Handles real-time communication, user authentication, call history, and WebRTC session management.
 
-## Features
+## Overview
 
-- User presence tracking
-- WebRTC signaling (offer/answer/ICE candidates)
-- In-call messaging (emoji reactions, chat)
-- TURN credential generation with short-lived tokens
-- TLS/WSS support for secure connections
+This Node.js server provides:
+- **WebSocket Signaling** – Facilitates WebRTC peer connection (offer/answer/ICE exchange)
+- **User Management** – Registration, login, and online presence tracking via MongoDB
+- **Call History** – Stores call logs with duration, quality metrics, and timestamps
+- **Real-time Statistics** – Collects and stores call quality data (bitrate, packet loss, RTT)
+- **REST API** – User profiles, contacts, and call statistics endpoints
 
-## Quick Start (Development)
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Runtime | Node.js |
+| WebSocket | ws |
+| HTTP Server | Express.js |
+| Database | MongoDB Atlas |
+| Protocol | WebRTC Signaling |
+
+## Quick Start
+
+### Prerequisites
+- Node.js v18+
+- MongoDB Atlas account (or local MongoDB instance)
+
+### Installation
 
 ```bash
 cd signaling-server
 npm install
-node server.js
+```
+
+### Configuration
+
+Update the MongoDB connection string in `server.js`:
+
+```javascript
+const MONGODB_URI = "mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?appName=<app>";
+```
+
+### Run the Server
+
+```bash
+npm start
 ```
 
 Server runs on `ws://0.0.0.0:3000`
 
-## Production Setup with TLS
+## API Endpoints
 
-### 1. Generate Self-Signed Certificates (Development)
+### Authentication
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/auth/register` | Register or login user |
 
-```bash
-mkdir -p certs
-openssl req -x509 -newkey rsa:4096 -keyout certs/server.key -out certs/server.crt -days 365 -nodes -subj "/CN=localhost"
-```
+### Users
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/users/:phone` | Get user profile |
+| PUT | `/api/users/:phone` | Update user profile |
 
-### 2. Use Let's Encrypt (Production)
+### Call History
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/calls/:phone` | Get call history |
+| POST | `/api/calls` | Save call record |
 
-```bash
-# Install certbot
-sudo apt install certbot
+### Statistics
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/health` | Server health check |
 
-# Generate certificate
-sudo certbot certonly --standalone -d your-domain.com
-
-# Certificates will be at:
-# /etc/letsencrypt/live/your-domain.com/fullchain.pem
-# /etc/letsencrypt/live/your-domain.com/privkey.pem
-```
-
-### 3. Run with TLS
-
-```bash
-# Using environment variables
-USE_TLS=true \
-CERT_PATH=/path/to/server.crt \
-KEY_PATH=/path/to/server.key \
-PORT=443 \
-node server.js
-```
-
-Server runs on `wss://0.0.0.0:443`
-
-## Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | 3000 | Server port |
-| `USE_TLS` | false | Enable TLS/WSS |
-| `CERT_PATH` | ./certs/server.crt | Path to SSL certificate |
-| `KEY_PATH` | ./certs/server.key | Path to SSL private key |
-| `TURN_SECRET` | your-turn-secret-here | HMAC secret for TURN credentials |
-
-## TURN Credential Generation
-
-The server generates time-limited TURN credentials compatible with coturn's REST API.
-
-### Request Credentials
-
-Send WebSocket message:
-```json
-{"type": "getTurnCredentials"}
-```
-
-Response:
-```json
-{
-  "type": "turnCredentials",
-  "username": "1234567890:user123",
-  "password": "base64encodedhmac",
-  "ttl": 3600,
-  "uris": ["turn:server:80", "turn:server:443"]
-}
-```
-
-### Configure coturn
-
-```bash
-# /etc/turnserver.conf
-use-auth-secret
-static-auth-secret=your-turn-secret-here
-realm=your-domain.com
-```
-
-## Message Types
+## WebSocket Message Types
 
 | Type | Direction | Description |
 |------|-----------|-------------|
-| `join` | Client→Server | Register user |
-| `getUsers` | Client→Server | Request user list |
-| `userList` | Server→Client | List of online users |
-| `offer` | Client→Client | SDP offer |
-| `answer` | Client→Client | SDP answer |
-| `candidate` | Client→Client | ICE candidate |
-| `reject` | Client→Client | Call rejection |
-| `hangup` | Client→Client | End call |
-| `emoji` | Client→Client | Emoji reaction |
-| `chat` | Client→Client | Chat message |
-| `getTurnCredentials` | Client→Server | Request TURN creds |
-| `turnCredentials` | Server→Client | TURN credentials |
+| `join` | Client → Server | Register user with phone number |
+| `offer` | Client ↔ Client | WebRTC SDP offer |
+| `answer` | Client ↔ Client | WebRTC SDP answer |
+| `candidate` | Client ↔ Client | ICE candidate exchange |
+| `reject` | Client ↔ Client | Decline incoming call |
+| `hangup` | Client ↔ Client | End active call |
+| `busy` | Server → Client | Callee is on another call |
 
-## Docker Deployment
+## Project Structure
 
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm install --production
-COPY server.js ./
-EXPOSE 3000 443
-CMD ["node", "server.js"]
+```
+signaling-server/
+├── server.js        # Main server with WebSocket & REST API
+├── package.json     # Dependencies and scripts
+└── README.md        # Documentation
 ```
 
-```bash
-docker build -t signaling-server .
-docker run -d -p 3000:3000 \
-  -e USE_TLS=false \
-  signaling-server
-```
+## Related
 
-## Nginx Reverse Proxy (Recommended for Production)
+- **Android App**: Echoo video calling app (Kotlin + WebRTC)
+- **Database**: MongoDB Atlas for user data and call history
 
-```nginx
-upstream signaling {
-    server 127.0.0.1:3000;
-}
+## License
 
-server {
-    listen 443 ssl http2;
-    server_name signal.your-domain.com;
-    
-    ssl_certificate /etc/letsencrypt/live/your-domain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/your-domain.com/privkey.pem;
-    
-    location / {
-        proxy_pass http://signaling;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_read_timeout 86400;
-    }
-}
-```
+ISC
+
