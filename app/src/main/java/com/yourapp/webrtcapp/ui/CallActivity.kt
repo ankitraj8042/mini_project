@@ -112,6 +112,12 @@ class CallActivity : AppCompatActivity() {
     private var lastPacketsLost = 0L
     private var totalDataUsedBytes = 0L  // Track cumulative data usage
     
+    // Poor quality dialog tracking
+    private var poorQualityStartTime = 0L  // When poor quality started
+    private var dontShowPoorQualityDialog = false  // User chose "Don't show again"
+    private var isPoorQualityDialogShowing = false  // Prevent multiple dialogs
+    private val POOR_QUALITY_THRESHOLD_MS = 20_000L  // 20 seconds threshold
+    
     // Real-time stats collection for saving to database
     private val statsSamples = mutableListOf<StatsSample>()
     private var callStartTime = 0L
@@ -884,8 +890,8 @@ class CallActivity : AppCompatActivity() {
     private fun showQualityPicker() {
         val qualities = arrayOf(
             "Low (240p) - Save Data",
-            "Medium (360p)",
-            "High (480p) - Best Quality",
+            "Medium (480p)",
+            "High (720p) - Best Quality",
             "Auto (Recommended)"
         )
         
@@ -909,11 +915,11 @@ class CallActivity : AppCompatActivity() {
                     }
                     1 -> {
                         isAutoQuality = false
-                        applyQualityLevel(NetworkQuality.MODERATE, "Medium (360p)")
+                        applyQualityLevel(NetworkQuality.MODERATE, "Medium (480p)")
                     }
                     2 -> {
                         isAutoQuality = false
-                        applyQualityLevel(NetworkQuality.GOOD, "High (480p)")
+                        applyQualityLevel(NetworkQuality.GOOD, "High (720p)")
                     }
                     3 -> {
                         isAutoQuality = true
@@ -928,9 +934,9 @@ class CallActivity : AppCompatActivity() {
     private fun applyQualityLevel(quality: NetworkQuality, name: String) {
         networkQuality = quality
         val (width, height, fps, bitrate) = when (quality) {
-            NetworkQuality.POOR -> listOf(320, 240, 10, 200_000)
-            NetworkQuality.MODERATE -> listOf(480, 360, 15, 500_000)
-            NetworkQuality.GOOD -> listOf(640, 480, 24, 1_000_000)
+            NetworkQuality.POOR -> listOf(320, 240, 15, 300_000)
+            NetworkQuality.MODERATE -> listOf(640, 480, 24, 800_000)
+            NetworkQuality.GOOD -> listOf(1280, 720, 30, 2_000_000)
         }
         
         // Update current resolution tracking
@@ -1362,25 +1368,70 @@ class CallActivity : AppCompatActivity() {
         if (newQuality != networkQuality) {
             networkQuality = newQuality
             
-            // Only suggest audio-only mode if quality becomes poor
-            if (newQuality == NetworkQuality.POOR && !isAudioOnlyMode && isVideoCall) {
-                runOnUiThread {
-                    suggestAudioOnlyMode()
+            // Track when poor quality started
+            if (newQuality == NetworkQuality.POOR) {
+                if (poorQualityStartTime == 0L) {
+                    poorQualityStartTime = System.currentTimeMillis()
                 }
+            } else {
+                // Quality improved - reset the timer
+                poorQualityStartTime = 0L
             }
             
             if (!isAudioOnlyMode) {
                 adjustVideoQuality(newQuality)
             }
         }
+        
+        // Check if we should show the poor quality dialog (after 20 seconds of continuous poor quality)
+        if (networkQuality == NetworkQuality.POOR && 
+            !isAudioOnlyMode && 
+            isVideoCall && 
+            !dontShowPoorQualityDialog &&
+            !isPoorQualityDialogShowing &&
+            poorQualityStartTime > 0 &&
+            (System.currentTimeMillis() - poorQualityStartTime) >= POOR_QUALITY_THRESHOLD_MS) {
+            
+            runOnUiThread {
+                suggestAudioOnlyMode()
+            }
+        }
     }
     
     private fun suggestAudioOnlyMode() {
+        if (isPoorQualityDialogShowing || dontShowPoorQualityDialog) return
+        isPoorQualityDialogShowing = true
+        
+        // Create checkbox view
+        val checkBox = android.widget.CheckBox(this).apply {
+            text = "Don't show this again"
+            setPadding(48, 24, 48, 8)
+        }
+        
         AlertDialog.Builder(this)
             .setTitle("Poor Network Quality")
-            .setMessage("Your network connection is unstable. Would you like to switch to Audio Only mode for better call quality?")
-            .setPositiveButton("Switch to Audio Only") { _, _ -> enableAudioOnlyMode() }
-            .setNegativeButton("Keep Video", null)
+            .setMessage("Your network connection has been unstable for a while. Would you like to switch to Audio Only mode for better call quality?")
+            .setView(checkBox)
+            .setPositiveButton("Switch to Audio Only") { _, _ -> 
+                if (checkBox.isChecked) {
+                    dontShowPoorQualityDialog = true
+                }
+                enableAudioOnlyMode()
+                isPoorQualityDialogShowing = false
+            }
+            .setNegativeButton("Keep Video") { _, _ ->
+                if (checkBox.isChecked) {
+                    dontShowPoorQualityDialog = true
+                }
+                isPoorQualityDialogShowing = false
+                // Reset timer so it doesn't show again immediately
+                poorQualityStartTime = System.currentTimeMillis()
+            }
+            .setOnCancelListener {
+                isPoorQualityDialogShowing = false
+                // Reset timer on cancel too
+                poorQualityStartTime = System.currentTimeMillis()
+            }
             .show()
     }
 
@@ -1433,7 +1484,7 @@ class CallActivity : AppCompatActivity() {
         currentVideoResolution = when (quality) {
             NetworkQuality.GOOD -> "720p"
             NetworkQuality.MODERATE -> "480p"
-            NetworkQuality.POOR -> "360p"
+            NetworkQuality.POOR -> "240p"
         }
         
         peerConnection?.senders?.forEach { sender ->
