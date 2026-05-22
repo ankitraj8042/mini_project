@@ -1,169 +1,161 @@
-# Echoo - WebRTC Video Calling App
+# Echoo - Adaptive WebRTC Calling App
 
-A real-time video calling Android application built with WebRTC technology, featuring peer-to-peer communication, call quality monitoring, and a Node.js signaling server with MongoDB backend.
+Echoo is a Kotlin Android application for real-time peer-to-peer audio and video calling. It uses WebRTC for media transport, a Node.js signaling server for session setup, and MongoDB for OTP authentication, contacts, call history, and call-quality analytics.
 
-![Platform](https://img.shields.io/badge/Platform-Android-green)
-![Language](https://img.shields.io/badge/Language-Kotlin-purple)
-![WebRTC](https://img.shields.io/badge/WebRTC-Enabled-blue)
+## Project Status
 
-## Features
+This repository is complete enough for an academic mini-project/demo and resume portfolio entry. The Android app, signaling server, authentication flow, contacts, call history, in-call chat/emoji, and network-quality monitoring features are implemented.
 
-- **HD Video Calls** – Real-time peer-to-peer video communication using WebRTC
-- **Audio Calls** – Voice-only calling option
-- **Call History** – View past calls with duration and timestamps
-- **Real-time Statistics** – Monitor call quality (bitrate, packet loss, latency)
-- **User Authentication** – Phone number based login system
-- **Online Presence** – See when contacts are available
-- **In-call Controls** – Mute, camera toggle, speaker switch
+It is not production-ready yet. Before public deployment, add a production TURN service, a real SMS OTP provider, TLS/WSS certificates, CI builds, and a documented two-device end-to-end test report.
+
+## Key Features
+
+- Real-time peer-to-peer audio and video calls using WebRTC.
+- Phone-number OTP login backed by MongoDB.
+- WebSocket signaling for SDP offers, answers, ICE candidates, presence, call events, chat, and emoji messages.
+- Contacts list, online user tracking, recent call history, missed/rejected/completed call states.
+- In-call controls for mute, speaker, camera toggle, camera switch, video/audio mode, hangup, chat, and emoji reactions.
+- Live call telemetry for bitrate, packet loss, RTT, network type, data usage, and quality status.
+- Adaptive quality handling that changes video bitrate/resolution and suggests audio-only mode on poor networks.
+- Kotlin quality-prediction module with unit tests for 2G, 3G, 4G, WiFi, edge cases, and profile transitions.
+- Node.js backend APIs for authentication, profile, contacts, call history, call stats, health checks, and TURN credential delivery.
 
 ## Tech Stack
 
-### Android App
-| Component | Technology |
-|-----------|------------|
-| Language | Kotlin |
-| UI | XML Layouts |
-| WebRTC | libwebrtc |
-| Networking | OkHttp (WebSocket) |
-| Architecture | MVVM |
+| Layer | Technology |
+| --- | --- |
+| Android | Kotlin, XML layouts, AndroidX, Material Components |
+| Real-time media | WebRTC via local `libwebrtc.aar` |
+| Signaling | OkHttp WebSocket client, Node.js `ws` server |
+| Backend API | Node.js, Express.js |
+| Database | MongoDB Atlas or compatible MongoDB instance |
+| Testing | JUnit for Android logic, Node syntax smoke test |
 
-### Backend Server
-| Component | Technology |
-|-----------|------------|
-| Runtime | Node.js |
-| Framework | Express.js |
-| WebSocket | ws |
-| Database | MongoDB Atlas |
+## Architecture
+
+```text
+Android app
+  |-- HTTP REST --> Node/Express API --> MongoDB
+  |-- WebSocket --> Node signaling server
+  |                    |-- user presence
+  |                    |-- offer/answer/ICE relay
+  |                    |-- call events, chat, emoji, stats
+  |
+  |-- WebRTC media path --> peer Android device
+```
+
+The signaling server does not carry the audio/video stream. It only coordinates connection setup and call events. Media flows between devices through WebRTC, using STUN/TURN when required by the network.
 
 ## Project Structure
 
-```
-echoo/
-├── app/                          # Android Application
-│   ├── src/main/
-│   │   ├── java/.../webrtcapp/
-│   │   │   ├── ui/               # Activities (Login, Dial, Call, Stats)
-│   │   │   ├── webrtc/           # WebRTC peer connection management
-│   │   │   ├── signaling/        # WebSocket signaling client
-│   │   │   ├── api/              # REST API client
-│   │   │   ├── auth/             # Authentication manager
-│   │   │   └── utils/            # Constants and helpers
-│   │   └── res/                  # Layouts, drawables, values
-│   └── build.gradle.kts
-│
-├── signaling-server/             # Node.js Backend
-│   ├── server.js                 # WebSocket + REST API server
-│   ├── package.json
-│   └── README.md
-│
-└── README.md
+```text
+mini_project/
+|-- app/                         Android application
+|   |-- libs/libwebrtc.aar        Local WebRTC dependency
+|   |-- src/main/java/.../ui      Login, dial, call, stats screens
+|   |-- src/main/java/.../signaling
+|   |-- src/main/java/.../api
+|   |-- src/main/java/.../auth
+|   |-- src/main/java/.../ai      Adaptive quality and network profile logic
+|   |-- src/main/java/.../turn
+|   `-- src/test                 Unit tests
+|-- signaling-server/            Node.js backend and WebSocket server
+|-- gradle/                      Gradle wrapper and version catalog
+`-- README.md
 ```
 
 ## Prerequisites
 
-- Android Studio Arctic Fox or later
-- Android SDK 24+ (Android 7.0)
-- Node.js v18+
-- MongoDB Atlas account
+- Android Studio with JDK 17.
+- Android SDK 34 installed.
+- Android device or emulator. Two physical devices on the same network are best for call testing.
+- Node.js 18 or newer.
+- MongoDB Atlas or local MongoDB for auth/history/stat persistence.
 
-## Getting Started
+## Backend Setup
 
-### 1. Clone the Repository
+From the project root:
 
-```bash
-git clone https://github.com/ankitraj8042/mini_project.git
-cd mini_project
-```
-
-### 2. Setup Signaling Server
-
-```bash
+```powershell
 cd signaling-server
-npm install
+npm.cmd install
 ```
 
-Update MongoDB connection string in `server.js`:
-```javascript
-const MONGODB_URI = "mongodb+srv://<username>:<password>@<cluster>.mongodb.net/";
+For your own MongoDB/TURN configuration, set environment variables before starting the server:
+
+```powershell
+$env:MONGODB_URI="mongodb+srv://<username>:<password>@<cluster>.mongodb.net/?appName=Echoo"
+$env:TURN_SECRET="<turn-secret-for-production>"
 ```
 
-Start the server:
-```bash
-npm start
+Start the backend:
+
+```powershell
+npm.cmd start
 ```
 
-Server runs on `ws://0.0.0.0:3000`
+The local server listens on:
 
-### 3. Configure Android App
+- REST: `http://0.0.0.0:3000`
+- WebSocket: `ws://0.0.0.0:3000`
 
-Update server IP in `app/src/main/java/.../utils/Constants.kt`:
-```kotlin
-const val SERVER_IP = "YOUR_SERVER_IP"
-const val SERVER_PORT = 3000
+## Android Setup
+
+1. Open the project root in Android Studio.
+2. Sync Gradle.
+3. Start the signaling server.
+4. Connect a device or start an emulator.
+5. Configure the server IP from the app's server settings, or update `DEFAULT_SERVER_IP` in `app/src/main/java/com/yourapp/webrtcapp/utils/Constants.kt`.
+6. Build and run the `app` module.
+
+For emulator-to-host testing, use `ws://10.0.2.2:3000`. For physical devices, use your computer's local LAN IP and keep both phones on the same network.
+
+## Validation Commands
+
+Backend smoke test:
+
+```powershell
+node --check signaling-server/server.js
 ```
 
-### 4. Build & Run
+Android unit tests:
 
-1. Open the project in Android Studio
-2. Sync Gradle files
-3. Connect an Android device or start an emulator
-4. Run the app
-
-## How It Works
-
-```
-┌─────────────┐         WebSocket          ┌─────────────────┐
-│   Phone A   │◄────────────────────────►  │ Signaling Server │
-│  (Caller)   │                            │   (Node.js)      │
-└──────┬──────┘                            └────────┬────────┘
-       │                                            │
-       │  Peer-to-Peer (WebRTC)                     │
-       │◄──────────────────────────────────────────►│
-       │                                            │
-┌──────┴──────┐         WebSocket          ┌───────┴───────┐
-│   Phone B   │◄────────────────────────►  │    MongoDB    │
-│  (Callee)   │                            │    Atlas      │
-└─────────────┘                            └───────────────┘
+```powershell
+.\gradlew.bat test
 ```
 
-1. **Signaling** – WebSocket server exchanges SDP offers/answers and ICE candidates
-2. **Connection** – WebRTC establishes direct peer-to-peer media streams
-3. **Media** – Video/audio flows directly between devices (no server relay)
-4. **Storage** – User data and call history stored in MongoDB
+Android debug build:
 
-## Screenshots
-
-| Login | Dial Pad | Video Call |
-|-------|----------|------------|
-| Phone authentication | Enter number to call | Active video session |
-
-## API Documentation
-
-See [signaling-server/README.md](signaling-server/README.md) for detailed API endpoints and WebSocket message types.
-
-## Testing
-
-For local testing with two devices:
-
-1. Run the signaling server on your computer
-2. Connect both devices to the same network
-3. Update `Constants.kt` with your computer's local IP
-4. Install the app on both devices
-5. Login with different phone numbers and call each other
-
-**Tip:** Use ngrok for testing across different networks:
-```bash
-ngrok http 3000
+```powershell
+.\gradlew.bat assembleDebug
 ```
 
-## Authors
+If Gradle reports that `JAVA_HOME` is not set, install/configure JDK 17 or use the JDK bundled with Android Studio.
 
-- Ankit Raj
+## Current Limitations
+
+- OTP is development-friendly: the backend returns `devOtp` unless `NODE_ENV=production`.
+- Production SMS delivery is not integrated yet.
+- Public OpenRelay TURN settings are suitable for demos, not production reliability.
+- Production credentials should be supplied through environment variables and never committed to the repository.
+- The Android package name still uses the original sample namespace `com.yourapp.webrtcapp`.
+- Full WebRTC behavior must be verified on two real devices because local unit tests cannot validate camera, microphone, NAT traversal, or peer media quality.
+
+## Resume Summary
+
+Echoo is a real-time Android communication app built with Kotlin, WebRTC, Node.js, WebSockets, and MongoDB. It demonstrates peer-to-peer audio/video calling, OTP authentication, contact management, call history, live network telemetry, and adaptive media-quality handling for low-bandwidth networks.
+
+Suggested resume bullets:
+
+- Built a Kotlin Android WebRTC calling app with peer-to-peer audio/video calls, WebSocket signaling, OTP login, contacts, call history, and in-call chat/emoji interactions.
+- Developed a Node.js/Express signaling backend with MongoDB persistence for users, contacts, call records, call-quality samples, and real-time presence.
+- Implemented live call telemetry and adaptive media controls using bitrate, packet loss, RTT, network type, and data usage to adjust video quality and recommend audio-only mode.
+- Added a Kotlin network-quality prediction module with JUnit coverage for network profiles, edge cases, and low-bandwidth scenarios.
+
+## Author
+
+Ankit Raj
 
 ## License
 
-This project is for educational purposes (5th Semester Mini Project).
-
----
-
-*Built with ❤️ using WebRTC and Kotlin*
+Educational mini-project/demo.
